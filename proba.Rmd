@@ -1,0 +1,11 @@
+---
+title: "Untitled"
+author: "Bagi Laura"
+date: "2023-10-16"
+output: html_document
+---
+
+```{r}
+ftabdh 
+```
+
