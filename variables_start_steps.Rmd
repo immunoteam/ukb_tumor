@@ -1,0 +1,56 @@
+---
+title: "Untitled"
+author: "Balazs Koncz"
+date: "2023-10-16"
+output: html_document
+---
+
+#Setup
+
+```{r}
+Packages <- c("magrittr", "dplyr", "data.table", "tidyr", "fastmatch", "ggplot2", "ggpubr", "tibble", "Rfast")
+#"stringr", "networkD3", "ComplexHeatmap", "future.apply", "RColorBrewer", "circlize", "scales", 
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+options(rstudio.help.showDataPreview = FALSE)
+
+```
+
+
+
+```{r}
+type_of_cancer = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/40006.txt")
+```
+
+```{r}
+sex = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/31_0_0.txt")
+date_of_death = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/40000.txt")
+date_of_last_fu = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/191.txt")
+descrip = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/40010.txt")
+histology = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/40011.txt")
+
+data_dates = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/34.txt") #YEAR OF BIRTH
+Table(data_dates$UKB_column_name)
+data_dates %<>% select(eid, value) %>% set_colnames(c("eid", "year_of_birth"))
+month_data = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/52.txt")
+data_dates$month_of_birth = month_data$value[fmatch(month_data$eid, data_dates$eid)]
+data_dates %<>% mutate(month_of_birth = ifelse(nchar(month_of_birth)==1,paste0("0", month_of_birth),month_of_birth))
+
+date_attend = fread("D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/53.txt")
+date_attend$value[2]
+
+month_data %<>% mutate(valueMOD = ifelse(nchar(value)==1,paste0("0", value),value))
+Table(year_data$eid == month_data$eid) #All TRUE
+date_of_birth = sapply(1:nrow(year_data), function(i) paste(year_data$value[i], month_data$valueMOD[i], "15", sep = "-"))
+names(date_of_birth) = year_data$eid
+saveRDS(date_of_birth, file = "D:/CloudStation/mygit_EXT/ukb_tumor/ukb_vars/date_of_birth")
+inst0 = date_attend %>% filter(UKB_column_name == "53-0.0")
+Table(year_data$eid == inst0$eid)
+
+```
+
+```{r}
+
+```
+
