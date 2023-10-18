@@ -1,0 +1,42 @@
+---
+title: "datatables"
+author: "Bagi Laura"
+date: "2023-10-16"
+output: html_document
+---
+
+```{r}
+
+#Librarys
+library(ggplot2)
+library(ggpubr)
+library(match2C)
+library(dplyr)
+library(plyr)
+year_of_birth = read.table("", header = T)
+sex = read.table("", header = T)
+date_of_attendings = read.table("", header = T)
+ethnic = read.table("", header = T)
+date_of_cancer_diag = read.table("", header = T)
+type_of_cancer = read.table("", header = T)
+
+
+ukb_datas_all_in_1=data.frame( eid=numeric(502366))
+ukb_datas_all_in_1$eid = year_of_birth$eid
+ukb_datas_all_in_1$birthyear = year_of_birth$value
+ukb_datas_all_in_1$sex = sex$value[match(sex$eid, ukb_datas_all_in_1$eid)]
+unique_ethnic<- list(eid= unique(ethnic$eid), Ethnic = I(split(ethnic$value, ethnic$eid)))
+ukb_datas_all_in_1$ethnic = merge(ukb_datas_all_in_1, unique_ethnic, by = , all.x = T)
+
+
+
+
+
+
+
+
+
+
+
+```
+
