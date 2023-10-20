@@ -13,14 +13,14 @@ library(ggpubr)
 library(match2C)
 library(dplyr)
 library(plyr)
-year_of_birth = read.table("C:/Users/bagil/Desktop/ukb/34.txt", header = T) #34
-month_of_birth= read.table("C:/Users/bagil/Desktop/ukb/52.txt", header = T) #52
-sex = read.table("C:/Users/bagil/Desktop/ukb/31_0_0.txt", header = T) #31
-date_of_attendings = read.table("C:/Users/bagil/Desktop/ukb/53.txt", header = T) #53
-ethnic = read.table("C:/Users/bagil/Desktop/ukb/21000.txt", header = T) #21000
-date_of_cancer_diag = read.table("C:/Users/bagil/Desktop/ukb/40005.txt", header = T) #40005
-type_of_cancer = read.table("C:/Users/bagil/Desktop/ukb/40006.txt", header = T) #40006
-age_of_cancer_diag=read.table("C:/Users/bagil/Desktop/ukb/40008.txt", header = T) #40008
+year_of_birth = read.table("", header = T) #34
+month_of_birth= read.table("", header = T) #52
+sex = read.table("", header = T) #31
+date_of_attendings = read.table("", header = T) #53
+ethnic = read.table("", header = T) #21000
+date_of_cancer_diag = read.table("", header = T) #40005
+type_of_cancer = read.table("", header = T) #40006
+age_of_cancer_diag=read.table("", header = T) #40008
 
 #UKB Datas all in 1
 ukb_datas_all_in_1=data.frame( eid=numeric(502366))
@@ -52,6 +52,7 @@ ukb_datas_all_in_1$cancertypes = df_cancer_type$cancer[match(ukb_datas_all_in_1$
 #Date of cancer diag. + cancer type
 date_of_cancer_diag
 type_of_cancer
+
 cancerdiag_list = list(eid=unique(date_of_cancer_diag$eid),
                        value=I(split(date_of_cancer_diag$value, date_of_cancer_diag$UKB_column_name)))
 cancer_type_list = list(eid=unique(type_of_cancer$eid),
@@ -64,10 +65,20 @@ cancerdiag_df = data.frame(eid=unique(date_of_cancer_diag$eid),
                           data=I(split(date_of_cancer_diag$UKB_column_name,date_of_cancer_diag$eid)))
 cancertype_df = data.frame(eid=unique(type_of_cancer$eid),
                            data=I(split(type_of_cancer$UKB_column_name, type_of_cancer$eid)))
-diag_and_dates = data.frame(eid=cancertype_df$eid,
-                            data_type= cancertype_df$data[match(cancertype_df$eid, diag_and_dates$eid, nomatch = NA)],
-                            data_date= cancerdiag_df$data[match(cancerdiag_df$eid, diag_and_dates$eid, nomatch = NA)])
 
+#lapply: mini dataframe: 1.c:eid, 2.c:dates, 3.c:cc, egyénenként menjen végig ->utána rbind egy nagy tábla
+
+cancer_datas=lapply(X = unique(date_of_cancer_diag$eid), FUN = function(x) {
+  temp_df=date_of_cancer_diag[date_of_cancer_diag$eid==x,]
+  temp_df$cnid= substr(x = temp_df$UKB_column_name, start = 7, stop = 10)
+  tempdf_2=type_of_cancer[type_of_cancer$eid==x,]
+  tempdf_2$cnid= substr(x = tempdf_2$UKB_column_name, start = 7, stop = 10)
+  cancer_df=left_join(x = temp_df, y = tempdf_2, by = "cnid")
+  cancer_df=cancer_df[,c(1,4,3,7)]
+  colnames(cancer_df)= c("eid", "cnid", "diagdate", "ctype")
+  cancer_df
+})
+cancer_datas=do.call(rbind,cancer_datas)
 
 
 ```
