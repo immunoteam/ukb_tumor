@@ -13,28 +13,60 @@ library(ggpubr)
 library(match2C)
 library(dplyr)
 library(plyr)
-year_of_birth = read.table("", header = T)
-sex = read.table("", header = T)
-date_of_attendings = read.table("", header = T)
-ethnic = read.table("", header = T)
-date_of_cancer_diag = read.table("", header = T)
-type_of_cancer = read.table("", header = T)
+year_of_birth = read.table("C:/Users/bagil/Desktop/ukb/34.txt", header = T) #34
+month_of_birth= read.table("C:/Users/bagil/Desktop/ukb/52.txt", header = T) #52
+sex = read.table("C:/Users/bagil/Desktop/ukb/31_0_0.txt", header = T) #31
+date_of_attendings = read.table("C:/Users/bagil/Desktop/ukb/53.txt", header = T) #53
+ethnic = read.table("C:/Users/bagil/Desktop/ukb/21000.txt", header = T) #21000
+date_of_cancer_diag = read.table("C:/Users/bagil/Desktop/ukb/40005.txt", header = T) #40005
+type_of_cancer = read.table("C:/Users/bagil/Desktop/ukb/40006.txt", header = T) #40006
+age_of_cancer_diag=read.table("C:/Users/bagil/Desktop/ukb/40008.txt", header = T) #40008
 
-
+#UKB Datas all in 1
 ukb_datas_all_in_1=data.frame( eid=numeric(502366))
 ukb_datas_all_in_1$eid = year_of_birth$eid
-ukb_datas_all_in_1$birthyear = year_of_birth$value
+df_births = data.frame(eid=year_of_birth$eid, year=year_of_birth$value, 
+                       month= month_of_birth$value[match(month_of_birth$eid, year_of_birth$eid)], 
+                       day= 15)
+df_births$birthdate = paste(df_births$year,
+                  df_births$month,
+                  df_births$day,
+                  sep = "-")
+ukb_datas_all_in_1$birthdate= df_births$birthdate[match(df_births$eid, ukb_datas_all_in_1$eid)]
 ukb_datas_all_in_1$sex = sex$value[match(sex$eid, ukb_datas_all_in_1$eid)]
-unique_ethnic<- list(eid= unique(ethnic$eid), Ethnic = I(split(ethnic$value, ethnic$eid)))
-ukb_datas_all_in_1$ethnic = merge(ukb_datas_all_in_1, unique_ethnic, by = , all.x = T)
+dataframe_ethnic = data.frame(eid=unique(ethnic$eid),
+                              ethnic=I(split(ethnic$value, ethnic$eid))
+                              )
+ukb_datas_all_in_1$ethnic = dataframe_ethnic$ethnic[match(ukb_datas_all_in_1$eid, dataframe_ethnic$eid)]
+df_date_of_a = data.frame(eid= unique(date_of_attendings$eid),
+                          value= I(split(date_of_attendings$value, date_of_attendings$eid))
+                          )
+ukb_datas_all_in_1$attendings= df_date_of_a$value[match(ukb_datas_all_in_1$eid, df_date_of_a$eid)]
+ukb_datas_all_in_1$cancerdiag = date_of_cancer_diag$value[match(ukb_datas_all_in_1$eid, date_of_cancer_diag$eid, nomatch = NA)]
+ukb_datas_all_in_1$Cancer.Diag.Age= age_of_cancer_diag$value[match(ukb_datas_all_in_1$eid, age_of_cancer_diag$eid, nomatch = NA)]
+df_cancer_type = data.frame(eid=unique(type_of_cancer$eid),
+                            cancer= I(split(type_of_cancer$value, type_of_cancer$eid))
+                            )
+ukb_datas_all_in_1$cancertypes = df_cancer_type$cancer[match(ukb_datas_all_in_1$eid, df_cancer_type$eid, nomatch = NA)]
 
+#Date of cancer diag. + cancer type
+date_of_cancer_diag
+type_of_cancer
+cancerdiag_list = list(eid=unique(date_of_cancer_diag$eid),
+                       value=I(split(date_of_cancer_diag$value, date_of_cancer_diag$UKB_column_name)))
+cancer_type_list = list(eid=unique(type_of_cancer$eid),
+                        value=I(split(type_of_cancer$UKB_column_name, type_of_cancer$value)))
 
+cancerdiag_list_2 = list(diag= I(split(date_of_cancer_diag$UKB_column_name, date_of_cancer_diag$eid)))
+cancer_type_list_2 = list(ctype = I(split(type_of_cancer$UKB_column_name, type_of_cancer$eid)))
 
-
-
-
-
-
+cancerdiag_df = data.frame(eid=unique(date_of_cancer_diag$eid),
+                          data=I(split(date_of_cancer_diag$UKB_column_name,date_of_cancer_diag$eid)))
+cancertype_df = data.frame(eid=unique(type_of_cancer$eid),
+                           data=I(split(type_of_cancer$UKB_column_name, type_of_cancer$eid)))
+diag_and_dates = data.frame(eid=cancertype_df$eid,
+                            data_type= cancertype_df$data[match(cancertype_df$eid, diag_and_dates$eid, nomatch = NA)],
+                            data_date= cancerdiag_df$data[match(cancerdiag_df$eid, diag_and_dates$eid, nomatch = NA)])
 
 
 
