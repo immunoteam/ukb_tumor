@@ -13,18 +13,14 @@ library(ggpubr)
 library(match2C)
 library(dplyr)
 library(plyr)
-year_of_birth = read.table("", header = T) #34
-month_of_birth= read.table("", header = T) #52
-sex = read.table("", header = T) #31
-date_of_attendings = read.table("", header = T) #53
-ethnic = read.table("", header = T) #21000
-date_of_cancer_diag = read.table("", header = T) #40005
-type_of_cancer = read.table("", header = T) #40006
-age_of_cancer_diag=read.table("", header = T) #40008
+library(tidyr)
+library(readxl)
+
 
 #UKB Datas all in 1
-ukb_datas_all_in_1=data.frame( eid=numeric(502366))
-ukb_datas_all_in_1$eid = year_of_birth$eid
+year_of_birth = read.table("", header = T) #34
+month_of_birth= read.table("", header = T) #52
+ukb_datas_all_in_1=data.frame(eid= year_of_birth$eid)
 df_births = data.frame(eid=year_of_birth$eid, year=year_of_birth$value, 
                        month= month_of_birth$value[match(month_of_birth$eid, year_of_birth$eid)], 
                        day= 15)
@@ -32,42 +28,33 @@ df_births$birthdate = paste(df_births$year,
                   df_births$month,
                   df_births$day,
                   sep = "-")
+df_births$birthdate=as.Date(df_births$birthdate)
+df_births$birthdate = format(df_births$birthdate, "%Y-%m-%d")
 ukb_datas_all_in_1$birthdate= df_births$birthdate[match(df_births$eid, ukb_datas_all_in_1$eid)]
+rm(year_of_birth, month_of_birth, df_births)
+
+sex = read.table(, header = T) #31
 ukb_datas_all_in_1$sex = sex$value[match(sex$eid, ukb_datas_all_in_1$eid)]
-dataframe_ethnic = data.frame(eid=unique(ethnic$eid),
-                              ethnic=I(split(ethnic$value, ethnic$eid))
-                              )
-ukb_datas_all_in_1$ethnic = dataframe_ethnic$ethnic[match(ukb_datas_all_in_1$eid, dataframe_ethnic$eid)]
-df_date_of_a = data.frame(eid= unique(date_of_attendings$eid),
-                          value= I(split(date_of_attendings$value, date_of_attendings$eid))
-                          )
-ukb_datas_all_in_1$attendings= df_date_of_a$value[match(ukb_datas_all_in_1$eid, df_date_of_a$eid)]
-ukb_datas_all_in_1$cancerdiag = date_of_cancer_diag$value[match(ukb_datas_all_in_1$eid, date_of_cancer_diag$eid, nomatch = NA)]
-ukb_datas_all_in_1$Cancer.Diag.Age= age_of_cancer_diag$value[match(ukb_datas_all_in_1$eid, age_of_cancer_diag$eid, nomatch = NA)]
-df_cancer_type = data.frame(eid=unique(type_of_cancer$eid),
-                            cancer= I(split(type_of_cancer$value, type_of_cancer$eid))
-                            )
-ukb_datas_all_in_1$cancertypes = df_cancer_type$cancer[match(ukb_datas_all_in_1$eid, df_cancer_type$eid, nomatch = NA)]
+rm(sex)
 
-#Date of cancer diag. + cancer type
-date_of_cancer_diag
-type_of_cancer
+ethnic = read.table("", header = T)
+dataframe_ethnic = pivot_wider(data = ethnic, id_cols = eid, names_from = UKB_column_name, values_from = value)
+colnames(dataframe_ethnic)=c("eid", "ethnic_1", "ethnic_2", "ethnic_3", "ethnic_4")
+ukb_datas_all_in_1 = cbind(ukb_datas_all_in_1, dataframe_ethnic[match(ukb_datas_all_in_1$eid, dataframe_ethnic$eid), c("ethnic_1", "ethnic_2", "ethnic_3", "ethnic_4")])
+rm(ethnic, dataframe_ethnic)
 
-cancerdiag_list = list(eid=unique(date_of_cancer_diag$eid),
-                       value=I(split(date_of_cancer_diag$value, date_of_cancer_diag$UKB_column_name)))
-cancer_type_list = list(eid=unique(type_of_cancer$eid),
-                        value=I(split(type_of_cancer$UKB_column_name, type_of_cancer$value)))
+date_of_attendings = read.table("C:/Users/bagil/Desktop/ukb/53.txt", header = T)
+attendings = pivot_wider(date_of_attendings, id_cols = eid, names_from = UKB_column_name, values_from = value)
+colnames(attendings)=c("eid", "attending_1", "attending_2", "attending_3", "attending_4")
+ukb_datas_all_in_1 = cbind(ukb_datas_all_in_1, attendings[match(ukb_datas_all_in_1$eid, attendings$eid), c("attending_1", "attending_2", "attending_3", "attending_4")])
+rm(date_of_attendings, attendings)
 
-cancerdiag_list_2 = list(diag= I(split(date_of_cancer_diag$UKB_column_name, date_of_cancer_diag$eid)))
-cancer_type_list_2 = list(ctype = I(split(type_of_cancer$UKB_column_name, type_of_cancer$eid)))
+#paste("attending", 1:10, sep = "_")
+#paste0("attending", 1:10)
+#paste("attending", 1:10, sep = "_", collapse = ",")
 
-cancerdiag_df = data.frame(eid=unique(date_of_cancer_diag$eid),
-                          data=I(split(date_of_cancer_diag$UKB_column_name,date_of_cancer_diag$eid)))
-cancertype_df = data.frame(eid=unique(type_of_cancer$eid),
-                           data=I(split(type_of_cancer$UKB_column_name, type_of_cancer$eid)))
-
-#lapply: mini dataframe: 1.c:eid, 2.c:dates, 3.c:cc, egyénenként menjen végig ->utána rbind egy nagy tábla
-
+date_of_cancer_diag = read.table("", header = T) #40005
+type_of_cancer = read.table("", header = T) #40006
 cancer_datas=lapply(X = unique(date_of_cancer_diag$eid), FUN = function(x) {
   temp_df=date_of_cancer_diag[date_of_cancer_diag$eid==x,]
   temp_df$cnid= substr(x = temp_df$UKB_column_name, start = 7, stop = 10)
@@ -79,6 +66,66 @@ cancer_datas=lapply(X = unique(date_of_cancer_diag$eid), FUN = function(x) {
   cancer_df
 })
 cancer_datas=do.call(rbind,cancer_datas)
+
+cancer_dates_simple = pivot_wider(data = cancer_datas, id_cols = eid, names_from = ctype, values_from = diagdate)
+cancer_dates_simple = select(cancer_dates_simple, -"NA" )
+cancer_dates_simple=cancer_dates_simple %>% 
+  mutate_all(~ifelse(. == "NULL", NA, .))
+ukb_datas_all_in_1 = left_join(x = ukb_datas_all_in_1, y = cancer_dates_simple, by="eid")
+only_cancer_datas = data.frame(eid=cancer_dates_simple$eid)
+rm(cancer_datas, date_of_cancer_diag, type_of_cancer)
+
+age_of_cancer_diag=read.table("", header = T)#40008
+ukb_datas_all_in_1$Cancer.Diag.Age= age_of_cancer_diag$value[match(ukb_datas_all_in_1$eid, age_of_cancer_diag$eid)]
+
+rm(age_of_cancer_diag)
+
+date_of_death= read.table("", header = T) #40000
+ukb_datas_all_in_1$date_of_death = date_of_death$value[match(ukb_datas_all_in_1$eid, date_of_death$eid, nomatch = NA)]
+ukb_datas_all_in_1$death= !is.na(ukb_datas_all_in_1$date_of_death)
+
+rm(date_of_death)
+
+p_cause_of_death = read.table("", header = T) #40001
+ukb_datas_all_in_1$cause_of_death = p_cause_of_death$value[match(ukb_datas_all_in_1$eid, p_cause_of_death$eid, nomatch = NA)]
+rm(p_cause_of_death)
+
+reported_occurences = read.table("", header = T) #40009
+ukb_datas_all_in_1$c.occurences= reported_occurences$value[match(ukb_datas_all_in_1$eid, reported_occurences$eid, nomatch = NA)]
+rm(reported_occurences)
+
+#Only Cancer datas
+only_cancer_datas = cbind(only_cancer_datas, ukb_datas_all_in_1[match(only_cancer_datas$eid, ukb_datas_all_in_1$eid,)])
+
+#ICD10 codes
+ICD10_codes = read_xlsx("")
+ICD10_codes_clean = ICD10_codes %>%
+  select(CODE, `LONG DESCRIPTION (VALID ICD-10 FY2023)`)
+rm(ICD10_codes)
+
+ICD10_characters = unique(unlist(strsplit(ICD10_codes_clean$`LONG DESCRIPTION (VALID ICD-10 FY2023)`, split = "")))
+
+#Histology
+histology_of_cancer = read.table("", header = T) #40011
+type_of_cancer = read.table("", header = T) #40006
+date_of_cancer_diag = read.table("", header = T) #40005
+cancer_codes = lapply(X = unique(histology_of_cancer$eid),FUN=function(x){
+   temp_df=histology_of_cancer[histology_of_cancer$eid==x,]
+   temp_df$cnid= substr(x = temp_df$UKB_column_name, start = 7, stop = 10)
+   tempdf_2=type_of_cancer[type_of_cancer$eid==x,]
+   tempdf_2$cnid= substr(x = tempdf_2$UKB_column_name, start = 7, stop = 10)
+   cancer_codes_df=left_join(x = temp_df, y = tempdf_2, by = "cnid")
+   cancer_codes_df=cancer_codes_df[,c(1,4,3,7)]
+   colnames(cancer_codes_df)= c("eid", "cnid", "histology", "ICD10")
+   cancer_codes_df
+})
+cancer_codes = do.call(rbind, cancer_codes)
+cancer_codes_his = pivot_wider(data = cancer_codes, id_cols = eid, names_from = ICD10, values_from = histology)
+cancer_codes_his=cancer_codes_his %>% 
+  mutate_all(~ifelse(. == "NULL", NA, .))
+
+
+
 
 
 ```
