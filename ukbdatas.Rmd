@@ -16,7 +16,8 @@ library(plyr)
 library(tidyr)
 library(readxl)
 library(forcats)
-
+library(survival)
+library(survminer)
 
 #UKB Datas all in 1
 year_of_birth = read.table("", header = T) #34
@@ -102,8 +103,7 @@ cancer_data$time = apply(X = cancer_data, MARGIN = 1, FUN = function(x){
   as.Date(as.character(x[2]))-as.Date(as.character(x[6]))
 })
 colnames(cancer_data)[colnames(cancer_data)=="date"] = "diag_date"
-save(cancer_data, file ="")
-dir.create("")
+
 #Only cancer datas
 sex = read.table("", header = T) #31
 cancer_data$sex = sex$value[match(cancer_data$eid, sex$eid)]
@@ -133,9 +133,10 @@ cancer_data$r.occurences= reported_occurences$value[match(cancer_data$eid, repor
 rm(reported_occurences)
 cancer_data = cancer_data[, c(1, 6, 2:21)]
 if ("birthdate.1" %in% colnames(cancer_data)) {
-  cancer_data <- cancer_data[, -which(colnames(cancer_data) == "birthdate.1")]
+  cancer_data=cancer_data[, -which(colnames(cancer_data) == "birthdate.1")]
 }
 ukb_datas_all_in_1 = left_join(ukb_datas_all_in_1, cancer_data %>% select(eid, diag_date, ICD_hist, ICD10, histology, time), by = "eid")
+
 #Boxplot
 count_data = table(cancer_data$ICD_hist)
 more_than_500_data = names(count_data[count_data > 500])
@@ -164,6 +165,188 @@ Histology_codes_clean = Histology_codes %>%
 Histology_character =unique(unlist(strsplit(Histology_codes$`Histology/Behavior Description`, split = "")))
 Histology_codes_clean$`Histology/Behavior Description`= gsub("['.,()-]", "", Histology_codes_clean$`Histology/Behavior Description`)
 rm(Histology_codes, Histology_character, ICD10_characters)
+
+```
+#Melanoma_incidencia by UKB
+```{r}
+#plus column: melanoma$c_date=NA, for loop, i->number of rows, filtered table, death col., if true date of death, if false 2023. 11. 14. or melanoma$c_date=current date, melanoma$c_date[meloanoma$death==T] = melanoma$date_of_death[melanoma$death==T]
+melanoma=data.frame(eid=unique(ukb_datas_all_in_1$eid),
+                    timepoint1=NA,
+                    timepoint2=NA,
+                    event=NA)
+for(i in 1:nrow(ukb_datas_all_in_1)){
+   melanoma$eid[i]
+   tempdf=ukb_datas_all_in_1[ukb_datas_all_in_1$eid==melanoma$eid[i],]
+   melanoma$timepoint1[i]=tempdf$birthdate[1]
+   if("C439_8720" %in% tempdf$ICD_hist==TRUE){
+      melanoma$timepoint2[i]=tempdf$diag_date[tempdf$ICD_hist=="C439_8720"]
+      melanoma$event[i]=1
+   }else if("C439_8720" %in% tempdf$ICD_hist==FALSE & tempdf$death[1]==F){
+      melanoma$timepoint2[i]="2023.11.14."
+      melanoma$event[i]=0
+   }else{
+      melanoma$timepoint2[i]=tempdf$date_of_death[1]
+      melanoma$event[i]=0}
+}
+
+melanoma_list =lapply(X = unique(ukb_datas_all_in_1$eid), FUN = function(x){
+  tempdf=ukb_datas_all_in_1[ukb_datas_all_in_1$eid==x,]
+  timepoint1=tempdf$birthdate[1]
+  if("C439_8720" %in% tempdf$ICD_hist==TRUE){
+      timepoint2=tempdf$diag_date[tempdf$ICD_hist=="C439_8720"]
+      event=1
+   }else if("C439_8720" %in% tempdf$ICD_hist==FALSE & tempdf$death[1]==F){
+      timepoint2="2023.11.14."
+      event=0
+   }else{
+      timepoint2=tempdf$date_of_death[1]
+      event=0}
+   c(x, timepoint1, timepoint2, event)
+})
+melanoma_df=do.call(rbind, melanoma_list)
+colnames(melanoma_df)=c("eid", "timepoint1", "timepoint2", "event")
+
+
+
+
+```
+#Melanoma by cancer data
+```{r}
+#first: unique by eid dataframe
+#for loop, melanoma_2, malanoma_2$timepoint_1;timepoint_2;event->NA, for(i in 1:nrow(melanoma_2)){}
+
+
+#melanoma_only=data.frame()
+#if ("C439_8720" %in% cancer_data$ICD_hist == TRUE) {#melanoma_only <- subset(cancer_data, ICD_hist == "C439_8720", select = c(eid))}
+
+#for(i in 1:nrow(cancer_data)){x   melanoma_only$eid[i]
+   #tempdf=cancer_data[cancer_data$eid==melanoma_only$eid[i],]
+   #if("C439_8720" %in% cancer_data$ICD_hist==T){
+    #  melanoma_only$timepoint1[i]=tempdf$diag_date[tempdf$ICD_hist=="C439_8720"] 
+#   }
+#   else if ("C439_8720" %in% tempdf$ICD_hist == TRUE & tempdf$date_of_death[1] == TRUE) {
+#    melanoma_only$timepoint2[i] <- tempdf$date_of_death[1]
+#    melanoma_only$event[i] <- 1
+#  } else if ("C439_8720" %in% tempdf$ICD_hist == TRUE & tempdf$date_of_death[1] == FALSE) {
+#    melanoma_only$timepoint2[i] <- "2023.11.14."
+#    melanoma_only$event[i] <- 0
+#  }
+#}
+
+#for (i in 1:nrow(melanoma_only)) {
+#   tempdf <- cancer_data[cancer_data$eid == melanoma_only$eid[i], ]
+#  if ("C439_8720" %in% tempdf$ICD_hist) {
+#    melanoma_only$timepoint1[i] <- ifelse("C439_8720" %in% tempdf$ICD_hist, tempdf$diag_date[tempdf$ICD_hist == "C439_8720"], NA)
+    #if (any(tempdf$date_of_death != "")) {
+     # melanoma_only$timepoint2[i] <- tempdf$date_of_death[tempdf$date_of_death != ""][1]
+      #melanoma_only$event[i] <- 1
+   # } else {
+    #  melanoma_only$timepoint2[i] <- "2023.11.14."
+   # melanoma_only$event[i] <- 0
+    #}
+  #} else {
+   # melanoma_only$timepoint1[i] <- NA
+    #melanoma_only$timepoint2[i] <- NA
+    #melanoma_only$event[i] <- NA
+  #}
+#}
+
+melanoma_only=data.frame(eid = character(),
+                            timepoint1 = character(),
+                            timepoint2 = character(),
+                            event = numeric(),
+                            stringsAsFactors = FALSE)
+unique_eids=unique(cancer_data$eid[cancer_data$ICD_hist == "C439_8720"])
+for (eid in unique_eids) {
+  tempdf=cancer_data[cancer_data$eid == eid, ]
+  timepoint1=tempdf$diag_date[tempdf$ICD_hist=="C439_8720"]
+  if (any(!is.na(tempdf$date_of_death) & tempdf$date_of_death != "")) {
+    timepoint2=tempdf$date_of_death[!is.na(tempdf$date_of_death) & tempdf$date_of_death != ""][1]
+    event=1
+  } else {
+    timepoint2="2023.11.14."
+    event=ifelse(tempdf$death[1], 1, 0)
+  }
+ melanoma_only=rbind(melanoma_only, c(eid, timepoint1, timepoint2, event))
+}
+colnames(melanoma_only)=c("eid", "timepoint1", "timepoint2", "event")
+   
+
+    
+```
+Melanoma2 by UKB
+```{r}
+
+melanoma_list2 =lapply(X = unique(ukb_datas_all_in_1$eid)) FUN = function(x){
+  tempdf=ukb_datas_all_in_1[ukb_datas_all_in_1$eid==x,]
+  timepoint1=tempdf$attending_1[1]
+  if("C439_8720" %in% tempdf$ICD_hist==TRUE){
+      timepoint2=tempdf$diag_date[tempdf$ICD_hist=="C439_8720"]
+      event=1
+  }else if("C439_8720" %in% tempdf$ICD_hist==FALSE){
+      timepoint2="2023.11.14."
+      event=0
+  }else{("C439_8720" %in% tempdf$ICD_hist==FALSE){
+      melanoma$timepoint2[i]="2023.11.14."
+      melanoma$event[i]=0 
+  }
+     }
+}
+
+
+melanoma2=data.frame(eid=unique(ukb_datas_all_in_1$eid),
+                    timepoint1=NA,
+                    timepoint2=NA,
+                    event=NA)
+for (i in 1:nrow(ukb_datas_all_in_1)) {
+  melanoma2$eid[i]
+  tempdf = ukb_datas_all_in_1[ukb_datas_all_in_1$eid == melanoma2$eid[i], ]
+  melanoma2$timepoint1[i] = tempdf$attending_1[1]
+  if ("C439_8720" %in% tempdf$ICD_hist == TRUE){
+    melanoma2$timepoint2[i] = tempdf$diag_date[tempdf$ICD_hist == "C439_8720"]
+    melanoma2$event[i] = 1
+  }else if ("C439_8720" %in% tempdf$ICD_hist == FALSE){
+    melanoma2$timepoint2[i] = "2023.11.14."
+    melanoma2$event[i] = 0
+  }
+}
+
+
+
+
+
+
+```
+Kaplan-Mayer estimate
+```{r}
+#Melanoma only dataframe, time: date of death(timepoint2)- diag date(timepoint1), event: death 1, not deaht 0.
+
+melanoma_only$time = as.Date(as.character(melanoma_only$timepoint2))-as.Date(as.character(melanoma_only$timepoint))
+melanoma_only$time = apply(X = melanoma_only, MARGIN = 1, FUN = function(x){
+  as.Date(as.character(x[3]))-as.Date(as.character(x[2]))})
+                           
+
+fit_1=survfit(Surv(time, event), data=melanoma_only)
+ggsurvplot(fit_1, pval = T, conf.int = T, risk.table = T, surv.median.line = "hv", linetype = "strata",
+           xlab="Time in day")
+
+#Incidencia, time: date of diagnosi - birthdate, event: persin has tumor 1, has not 0.
+
+melanoma$time=as.Date(as.character(melanoma$timepoint2)) - as.Date(as.character(melanoma$timepoint1))
+
+fit_2 = survfit(Surv(time, event), data=melanoma)
+ggsurvplot(fit_2, pval = T, conf.int = T, surv.median.line = "hv",linetype = "strata",
+           xlab="Time ond days")
+
+#Melanoma 2, time= date of diagnosis - first attending, event= has tumor 1, has not 0
+melanoma2 = as.Date(as.character(melanoma2$timepoint2)) - as.Date(as.character(melanoma2$timepoint1))
+fit_3 = survfit(Surv(time, event), data=melanoma2)
+ggsurvplot(fit_3, pval = T, conf.int = T, surv.median.line = "hv",linetype = "strata",
+           xlab="Time ond days")
+
+
+
+
 
 ```
 
