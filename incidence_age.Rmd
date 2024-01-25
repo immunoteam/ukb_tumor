@@ -1,0 +1,85 @@
+---
+title: "incidence_by_age"
+author: "Bagi Laura"
+date: "2024-01-19"
+output: html_document
+---
+#Libraries
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(match2C)
+library(dplyr)
+library(plyr)
+library(tidyr)
+library(readxl)
+library(forcats)
+library(survival)
+library(survminer)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(caret)
+library(tidyverse)
+library(conflicted)
+library(lubridate, warn.conflicts = F)
+library(future.apply)
+
+```
+
+#Files
+```{r}
+load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
+
+```
+
+
+```{r}
+
+age_datas = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  subset_data = unique_tempdf %>%
+    filter(cancer_type == x, age_in_years <= 30)
+  cases_per_age=subset_data %>%
+    group_by(age_in_years) %>%
+    summarise(number_of_cases = n()) %>%
+    mutate(cumulative_cases = cumsum(number_of_cases))
+  age_table = cases_per_age %>%
+    mutate(
+      all_cases_minus_cases = max(nrow(unique_tempdf), default = 0) - cumulative_cases,
+      cancer_type = x
+    )
+ })
+
+
+ukb_data_cancer$age_at_cancer_in_years = floor(as.numeric(ukb_data_cancer$age_at_cancer)/365.25)
+create_age_table <- function(cancer_type){
+  subset_ukb = ukb_data_cancer %>%
+    filter(cancer_type == cancer_type, age_at_cancer_in_years <= 30)
+  cases_per_age_df = subset_ukb %>%
+    group_by(age_at_cancer_in_years) %>%
+    summarise(number_of_cases = n()) %>%
+    mutate(cumulative_cases = cumsum(number_of_cases))
+  age_table_ukb = cases_per_age_df %>%
+    mutate(
+      all_cases_minus_cases = nrow(distinct(ukb_data_cancer, eid, .keep_all = TRUE)) - cumulative_cases, cancer_type = .env$cancer_type
+    )
+}
+
+cancer_age_tables <- lapply(icd_mapping$cancer_type, function(cancer_type) create_age_table(cancer_type))
+final_age_table <- bind_rows(cancer_age_tables)  
+c.age_tables_list <- setNames(final_age_table, icd_mapping)
+melanoma_age_table <- c.age_tables_list[["Melanoma"]]
+
+  
+```
+
