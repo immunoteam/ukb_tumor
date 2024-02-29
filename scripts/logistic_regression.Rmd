@@ -1,0 +1,180 @@
+---
+title: "logistic_regression"
+author: "Bagi Laura"
+date: "2024-02-01"
+output: html_document
+---
+
+#Libraries
+```{r}
+
+
+library(ggpubr)
+library(fastmatch)
+library(readxl)
+library(forcats)
+library(survival)
+library(survminer)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(caret)
+library(tidyverse)
+library(future.apply)
+library(magrittr)
+
+```
+
+#Files
+```{r}
+load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
+load("C:/Users/bagil/Desktop/ukb/objects/age_table")
+load("C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
+load("C:/Users/bagil/Desktop/ukb/objects/genetic_burden")
+
+```
+
+#Example
+```{r}
+library(mlbench)
+data("PimaIndiansDiabetes2", package = "mlbench")
+PimaIndiansDiabetes2 = na.omit(PimaIndiansDiabetes2)
+sample_n(PimaIndiansDiabetes2, 3)
+set.seed(123)
+training.samples=PimaIndiansDiabetes2$diabetes %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data=PimaIndiansDiabetes2[training.samples, ]
+test.data=PimaIndiansDiabetes2[-training.samples, ]
+
+model = glm(diabetes ~., data = train.data, family = binomial) #data = ukb_data_cancer, diabetes = cancer_type
+probabilities = model %>% predict(test.data, type = "response")
+predicted_classes = ifelse(probabilities > 0.5, "pos", "neg")
+mean(predicted_classes == test.data$diabetes)
+
+model_2 = glm(diabetes ~ glucose, data = train.data, family = binomial)
+summary(model_2)$coef
+newwdata = data.frame(glucose = c(20, 180))
+probabilities_2 = model_2 %>% predict(newwdata, type = "response")
+predicted_classes_2 = ifelse(probabilities_2 >0.5, "pos", "neg")
+train.data %>% 
+  mutate(prob = ifelse(diabetes == "pos", 1, 0)) %>%
+  ggplot(aes(glucose, prob)) +
+  geom_point(alpha = 0.2) + 
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  labs(
+    title = "Logistic Regression Model", 
+    x = "Plasma Glucose Concentration",
+    y = "Probability of being diabete-pos"
+    )
+
+model = glm( diabetes ~ glucose + mass + pregnant, 
+                data = train.data, family = binomial)
+summary(model)$coef
+summary(model)$ #p value: coef(summary(fit))[,4]
+
+model = glm(cancer_log ~ ., data = ukb_data_cancer, family = binomial)
+summary(model)$coef
+coef(summary(fit))[,4]
+
+
+
+```
+
+#UkB logistic regression
+```{r}
+
+colnames(genetic_burdens) = c("eid", "number_of_MAF_1_percent", "PTV_burden_of_MAF_1_percent", "shet_burden_of_MAF_1_percent")
+genetic_burdens$eid = as.numeric(genetic_burdens$eid, na.rm=T)
+
+ukb_data_cancer  %<>%  
+  left_join(genetic_pca_clean, by = "eid")
+colnames(ukb_data_cancer)[23:62] = paste0("gpca_", 1:40)
+
+ukb_data_cancer %<>% 
+  left_join(genetic_burdens, by = "eid")
+
+
+log_reg_model = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$cancer_log = unique_tempdf$cancer_type == x
+  model = glm(cancer_log ~ ethnic_group + gpca_1 + gpca_2 + gpca_3, data = unique_tempdf, family = binomial)
+  summary(model)$coef
+  coef(summary(model))[,4]
+})
+
+
+
+```
+
+
+
+```{r}
+
+log2_reg_model = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$cancer_log = unique_tempdf$cancer_type == x
+  model = glm(cancer_log ~ s.color + ethnic_group + gpca_1 + gpca_2 + gpca_3, data = unique_tempdf, family = binomial)
+  summary(model)
+  summary(model)$coef
+  coef(summary(model))[,4]
+})
+
+
+
+```
+
+#First 10 genetic PCA
+```{r}
+
+log_reg_model_3 = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$cancer_log = unique_tempdf$cancer_type == x
+  model = glm(cancer_log ~ age + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf, family = binomial)
+  summary(model)
+  summary(model)$coef
+  coef(summary(model))[,4]
+})
+
+
+
+```
+
+#Plus burdens
+```{r}
+
+log_reg_model_burden_low = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$cancer_log = unique_tempdf$cancer_type == x
+  unique_tempdf = dplyr::filter(unique_tempdf, PTV_burden == "Low")
+  model = glm(cancer_log ~ age + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10 + PTV_burden, data =unique_tempdf, family = binomial)
+  summary(model)
+  summary(model)$coef
+  coef(summary(model))["PTV_burdenHigh", 4]
+})
+```
+

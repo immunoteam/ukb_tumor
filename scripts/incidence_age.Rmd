@@ -1,0 +1,512 @@
+---
+title: "incidence_by_age"
+author: "Bagi Laura"
+date: "2024-01-19"
+output: html_document
+---
+#Libraries
+```{r}
+library(ggpubr)
+library(fastmatch)
+library(readxl)
+library(forcats)
+library(survival)
+library(survminer)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(caret)
+library(tidyverse)
+library(future.apply)
+library(magrittr)
+options(dplyr.summarise.inform = F)
+
+
+```
+
+#Files
+```{r}
+load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
+load("C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
+load("C:/Users/bagil/Desktop/ukb/objects/genetic_burden")
+
+```
+
+#UKB age table basic
+```{r}
+ages_df = ukb_data_cancer %>%
+  distinct(eid, age) %>%
+  group_by(age) %>%
+  summarize(Number_of_People = n()) %>%
+  arrange(age) %>%
+  mutate(
+    cumulative_cases = cumsum(Number_of_People),
+  )
+
+temp_df = data.frame(age = 1:max(ukb_data_cancer$age))
+
+ages_df_complete=temp_df %>% 
+  left_join(ages_df, by = "age") %>%
+  mutate(Number_of_People = ifelse(is.na(Number_of_People), 0, Number_of_People))
+
+for(i in 2:nrow(ages_df_complete)){
+  if(is.na(ages_df_complete$cumulative_cases[i]) & !is.na(ages_df_complete$cumulative_cases[i - 1])){
+    ages_df_complete$cumulative_cases[i] = ages_df_complete$cumulative_cases[i - 1]
+  }
+}
+l = length(unique(ukb_data_cancer$eid))
+ages_df_complete$cumulative_cases[is.na(ages_df_complete$cumulative_cases)] = 0  
+ages_df_complete$n.people = l - ages_df_complete$cumulative_cases
+
+age_datas = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  unique_tempdf %>%
+    filter(cancer_type == x) %>%
+    group_by(age_in_years) %>%
+    summarise(number_of_cases = n()) %>%
+    mutate(cumulative_cases = cumsum(number_of_cases)) %>% 
+    mutate(all_cases_minus_cases = max(nrow(unique_tempdf), default = 0) - cumulative_cases) %>%
+    mutate(cancer_type = x, .before = "age_in_years") 
+
+ })
+
+age_tables = do.call(rbind, age_datas)
+age_tables$n.people = ages_df_complete$n.people[match(age_tables$age_in_years, ages_df_complete$age)]
+age_tables$age_associated_incidence = age_tables$number_of_cases/age_tables$n.people
+
+
+  
+
+
+```
+#Age plots number 1
+```{r}
+ggplot(age_tables[age_tables$cancer_type == "Thyroid",], mapping = aes(x = age_in_years, y = age_associated_incidence)) +
+  geom_point() +
+  geom_smooth()
+
+ggplot(age_tables[age_tables$cancer_type == "Melanoma",], mapping = aes(x = age_in_years, y = cumulative_cases)) +
+  geom_point() +
+  facet_wrap(~sex)
+
+```
+
+#Include sex
+```{r}
+
+ages_df_sex = ukb_data_cancer %>%
+  distinct(eid, age, sex) %>%
+  group_by(age, sex) %>%
+  summarize(Number_of_People = n()) %>%
+  arrange(age) %>%
+  group_by(sex) %>% 
+  mutate(
+    cumulative_cases = cumsum(Number_of_People)
+  )
+
+temp_df = expand.grid(age = 1:max(ukb_data_cancer$age), sex = 0:1)
+ 
+
+ages_df_sex_complete = temp_df %>%
+  left_join(ages_df_sex, by = c("age", "sex")) %>%
+  mutate(Number_of_People = ifelse(is.na(Number_of_People), 0, Number_of_People))
+
+ages_df_sex_temp = lapply(unique(ages_df_sex$sex), FUN = function(x){
+  tempdf = ages_df_sex_complete[ages_df_sex_complete$sex == x, ]
+  for(i in 2:nrow(tempdf)){
+    if(is.na(tempdf$cumulative_cases[i]) & !is.na(tempdf$cumulative_cases[i - 1])){
+      tempdf$cumulative_cases[i] = tempdf$cumulative_cases[i - 1]
+    }
+  }
+  tempdf$cumulative_cases[is.na(tempdf$cumulative_cases)] = 0
+  l = length(ukb_data_cancer$eid[ukb_data_cancer$sex == x])
+  tempdf$n.people = l - tempdf$cumulative_cases
+  tempdf
+})
+
+ages_df_sex_complete_2 = do.call(rbind, ages_df_sex_temp)
+
+
+
+age_datas_skin = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){ 
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$diag_age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  unique_tempdf %>%
+    filter(cancer_type == x) %>%
+    group_by(sex, diag_age_in_years) %>%
+    summarise(number_of_cases = n()) %>%
+    group_by(sex) %>%
+    mutate(cumulative_cases_diag = cumsum(number_of_cases)) %>% 
+    mutate(cancer_type = x, .before = "diag_age_in_years") 
+
+ })
+
+age_table_sex = bind_rows(age_datas_skin)
+
+
+age_table_sex_final = age_table_sex %>% 
+  left_join(ages_df_sex_complete_2, by = c("diag_age_in_years" = "age", "sex"))
+
+age_table_sex_final$age_associated_incidence = age_table_sex_final$number_of_cases/age_table_sex_final$n.people
+
+
+rm(age_table_sex, age_datas_skin, ages_df_sex_complete_2, ages_df_sex_temp, ages_df_sex_complete, temp_df, ages_df_sex)
+
+
+```
+
+#Age-sex plots
+```{r}
+load("C:/Users/bagil/Desktop/ukb/objects/age_table_sex")
+ggplot(age_table_sex_final[age_table_sex_final$cancer_type == "Breast",], mapping = aes(x = diag_age_in_years, y = age_associated_incidence)) +
+  geom_point() +
+  facet_wrap(~sex)
+
+ggplot(age_table_sex_final[age_table_sex_final$cancer_type == "Melanoma", ]) + 
+  geom_point(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(sex))) +
+  geom_smooth(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(sex)))
+
+age_sex_list = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  ggplot(age_table_sex_final[age_table_sex_final$cancer_type == x, ]) + 
+    geom_point(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(sex))) +
+    geom_smooth(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(sex))) +
+    scale_color_manual(values = c("0" = "red", "1" = "blue")) +
+    ggtitle(label = "Age associated incidence", x) + xlab("Diagnosis age") + ylab("Incidence")
+})
+
+ggarrange(plotlist = age_sex_list, ncol = 5, nrow = 5, common.legend = T)
+ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Incidence/age_incidence_sex.jpg",  width = 80, height = 40, units = "cm", dpi = 300)
+
+
+```
+
+#Include skin for melanoma
+```{r}
+
+ages_df_skin = ukb_data_cancer %>%
+  distinct(eid, age, s.color) %>%
+  group_by(age, s.color) %>%
+  summarize(Number_of_People = n()) %>%
+  arrange(age) %>%
+  group_by(s.color) %>% 
+  mutate(
+    cumulative_cases = cumsum(Number_of_People)
+  )
+
+ages_df_skin$s.color[is.na(ages_df_skin$s.color)] = "No data"
+
+
+temp_df = expand.grid(age = 1:max(ukb_data_cancer$age), s.color = unique(ukb_data_cancer$s.color))
+temp_df$s.color = factor(temp_df$s.color, levels = c(levels(temp_df$s.color), "No data"))
+temp_df$s.color[is.na(temp_df$s.color)] = "No data"
+
+ages_df_skin_complete = temp_df %>%
+  left_join(ages_df_skin, by = c("age", "s.color")) %>%
+  mutate(Number_of_People = ifelse(is.na(Number_of_People), 0, Number_of_People))
+
+
+ages_df_skin_temp = lapply(unique(ages_df_skin$s.color), FUN = function(x){
+  tempdf = ages_df_skin_complete[ages_df_skin_complete$s.color == x, ]
+  for(i in 2:nrow(tempdf)){
+    if(is.na(tempdf$cumulative_cases[i]) & !is.na(tempdf$cumulative_cases[i - 1])){
+      tempdf$cumulative_cases[i] = tempdf$cumulative_cases[i - 1]
+    }
+  }
+  tempdf$cumulative_cases[is.na(tempdf$cumulative_cases)] = 0
+  l = length(ukb_data_cancer$eid[ukb_data_cancer$s.color == x])
+  tempdf$n.people = l - tempdf$cumulative_cases
+  tempdf
+})
+
+ages_df_skin_complete_2 = do.call(rbind, ages_df_skin_temp)
+
+
+age_datas_skin = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){ 
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$diag_age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  unique_tempdf$s.color[is.na(unique_tempdf$s.color)] = "No data"
+  unique_tempdf %>%
+    filter(cancer_type == x) %>%
+    group_by(s.color, diag_age_in_years) %>%
+    summarise(number_of_cases = n()) %>%
+    group_by(s.color) %>%
+    mutate(cumulative_cases_diag = cumsum(number_of_cases)) %>% 
+    mutate(cancer_type = x, .before = "diag_age_in_years") 
+ })
+
+age_table_skin = bind_rows(age_datas_skin)
+age_table_skin_final = age_table_skin %>% 
+  left_join(ages_df_skin_complete_2, by = c("diag_age_in_years" = "age", "s.color"))
+
+age_table_skin_final$age_associated_incidence = age_table_skin_final$number_of_cases/age_table_skin_final$n.people
+
+
+rm(age_table_skin, age_datas_skin, ages_df_skin_complete_2, ages_df_skin_temp, ages_df_skin_complete, temp_df, ages_df_skin)
+
+```
+
+#Skin plot
+```{r}
+load("C:/Users/bagil/Desktop/ukb/objects/age_table_skin")
+
+ggplot(age_table_skin_final[age_table_skin_final$cancer_type == "Melanoma", ]) + 
+  geom_point(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(s.color))) +
+  geom_smooth(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(s.color))) +
+  ggtitle(label = "Age associated incidence Melanoma") + xlab("Diagnosis age") + ylab("Incidence")
+
+ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Incidence/age_incidence_by_skin.jpg", width = 60, height = 30, units = "cm", dpi = 300)
+
+
+```
+
+#Include ethnic
+```{r}
+#Ethnic groups
+
+ethnic_df = data.frame(ethnic = c("White", "Mixed", "Asian or Asian British", "Black or Black British", "Chinese", "Other ethnic group", "Do not know", "Prefer not to answer"),
+                        ethnic_code = c(1, 2, 3, 4, 5, 6, (-1), (-3)))
+
+ukb_data_cancer$ethnic_1 = ifelse(is.na(as.numeric(ukb_data_cancer$ethnic_1)), 0, as.numeric(ukb_data_cancer$ethnic_1))
+
+#ukb_data_cancer$ethnic_numb = as.integer(str_extract(ukb_data_cancer$ethnic_1, "-?\\d"))
+
+ukb_data_cancer$ethnic_numb = ifelse(nchar(ukb_data_cancer$ethnic_1) == 4, substr(ukb_data_cancer$ethnic_1, 1,1), ukb_data_cancer$ethnic_1)
+ukb_data_cancer$ethnic_group = ethnic_df$ethnic[fmatch(ukb_data_cancer$ethnic_numb, ethnic_df$ethnic_code)]
+
+
+ages_df_ethnic = ukb_data_cancer %>%
+  distinct(eid, age, ethnic_group) %>%
+  group_by(age, ethnic_group) %>%
+  summarize(Number_of_People = n()) %>%
+  arrange(age) %>%
+  group_by(ethnic_group) %>% 
+  mutate(
+    cumulative_cases = cumsum(Number_of_People)
+  )
+
+ages_df_ethnic$ethnic_group[is.na(ages_df_ethnic$ethnic_group)] = "No data"
+
+
+temp_df = expand.grid(age = 1:max(ukb_data_cancer$age), ethnic_group = unique(ukb_data_cancer$ethnic_group))
+temp_df$ethnic_group = factor(temp_df$ethnic_group, levels = c(levels(temp_df$ethnic_group), "No data"))
+temp_df$ethnic_group[is.na(temp_df$ethnic_group)] = "No data"
+
+ages_df_ethnic_complete = temp_df %>%
+  left_join(ages_df_ethnic, by = c("age", "ethnic_group")) %>%
+  mutate(Number_of_People = ifelse(is.na(Number_of_People), 0, Number_of_People))
+
+
+ages_df_ethnic_temp = lapply(unique(ages_df_ethnic$ethnic_group), FUN = function(x){
+  tempdf = ages_df_ethnic_complete[ages_df_ethnic_complete$ethnic_group == x, ]
+  for(i in 2:nrow(tempdf)){
+    if(is.na(tempdf$cumulative_cases[i]) & !is.na(tempdf$cumulative_cases[i - 1])){
+      tempdf$cumulative_cases[i] = tempdf$cumulative_cases[i - 1]
+    }
+  }
+  tempdf$cumulative_cases[is.na(tempdf$cumulative_cases)] = 0
+  l = length(ukb_data_cancer$eid[ukb_data_cancer$ethnic_group == x])
+  tempdf$n.people = l - tempdf$cumulative_cases
+  tempdf
+})
+
+ages_df_ethnic_complete_2 = do.call(rbind, ages_df_ethnic_temp)
+
+
+age_datas_ethnic = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){ 
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$diag_age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  unique_tempdf$ethnic_group[is.na(unique_tempdf$ethnic_group)] = "No data"
+  unique_tempdf %>%
+    dplyr::filter(cancer_type == x) %>%
+    group_by(ethnic_group, diag_age_in_years) %>%
+    summarise(number_of_cases = n()) %>%
+    group_by(ethnic_group) %>%
+    mutate(cumulative_cases_diag = cumsum(number_of_cases)) %>% 
+    mutate(cancer_type = x, .before = "diag_age_in_years") 
+ })
+
+age_table_ethnic = bind_rows(age_datas_ethnic)
+age_table_ethnic_final = age_table_ethnic %>% 
+  left_join(ages_df_ethnic_complete_2, by = c("diag_age_in_years" = "age", "ethnic_group"))
+
+age_table_ethnic_final$age_associated_incidence = age_table_ethnic_final$number_of_cases/ age_table_ethnic_final$n.people
+age_table_ethnic_final
+#save(age_table_ethnic_final, file = "C:/Users/bagil/Desktop/ukb/objects/age_ethnic")
+
+#Remove groups
+
+
+
+rm(age_table_ethnic, age_datas_ethnic, ages_df_ethnic_complete_2, ages_df_ethnic_temp, ages_df_ethnic_complete, temp_df, ages_df_ethnic, groups_to_remove)
+
+```
+
+#Ethnic plots
+```{r}
+
+load("C:/Users/bagil/Desktop/ukb/objects/age_ethnic")
+
+groups_to_remove <- c("Do not know", "Prefer not to answer", "No data", "Other ethnic group")
+age_table_ethnic_final = subset(age_table_ethnic_final, !(ethnic_group %in% groups_to_remove))
+
+#age_table_ethnic_final$ethnic_group = factor(age_table_ethnic_final$ethnic_group, levels = c("White", "Mixed", "Asian or Asian British", "Black or Black British", "Chinese", "Other ethnic group"))
+
+age_ethnic_list = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf = age_table_ethnic_final %>% 
+    filter(cancer_type == x) %>% 
+    add_count(ethnic_group) %>% 
+    filter(n > 20)
+  ggplot(tempdf) + 
+    geom_point(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(ethnic_group))) +
+    geom_smooth(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(ethnic_group))) +
+    scale_color_manual(values = c("White" = "red", "Mixed" = "blue", "Asian or Asian British" = "green", "Black or Black British" = "yellow", "Chinese" = "brown", "Other ethnic group" = "pink")) +
+    theme(legend.position = "right") +
+    ggtitle(label = "Age associated incidence", x) + xlab("Diagnosis age") + ylab("Incidence")
+})
+
+
+#legend_ethnic = get_legend(age_ethnic_list[[1]])
+#plots_ethnic = plot_grid(plotlist = age_ethnic_list, ncol = 5, align = "h", labels = "AUTO") +
+  #theme(legend.position = "top")
+#print(plots_ethnic)
+
+#plots_without_legend <- plot_grid(plotlist = age_ethnic_list, ncol = 5, align = "h", labels = "AUTO")
+#combined_plot <- plot_grid(plots_without_legend, legend_ethnic, ncol = 1, rel_heights = c(1, 0.1))
+#print(combined_plot)
+
+ethnic_plots = ggarrange(plotlist = age_ethnic_list, ncol = 5, nrow = 5)
+
+ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Incidence/age_incidence_ethnic_f20.jpg", plot = ethnic_plots, width = 80, height = 40, units = "cm", dpi = 300)
+
+
+```
+
+
+
+
+#Include genetic burden
+```{r}
+#PTV burdens
+
+#ukb_data_cancer$PTV_burden = cut(ukb_data_cancer$PTV_burden_of_MAF_1_percent, breaks = c(min(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T), median(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T), max(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T)), labels = c("Low", "High"), include.lowest = T, right = T)
+
+ukb_data_cancer$PTV_burden = cut(ukb_data_cancer$PTV_burden_of_MAF_1_percent, breaks = quantile(ukb_data_cancer$PTV_burden_of_MAF_1_percent, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
+
+ukb_data_cancer %<>% 
+  filter(!is.na(PTV_burden))
+
+#Ages and burdens
+ages_df_burden = ukb_data_cancer %>%
+  distinct(eid, age, PTV_burden) %>%
+  group_by(age, PTV_burden) %>%
+  summarize(Number_of_People = n()) %>%
+  arrange(age) %>%
+  group_by(PTV_burden) %>% 
+  mutate(
+    cumulative_cases = cumsum(Number_of_People)
+  )
+
+temp_df = expand.grid(age = 1:max(ukb_data_cancer$age), PTV_burden = levels(ukb_data_cancer$PTV_burden))
+
+ages_df_burden_complete = temp_df %>%
+  left_join(ages_df_burden, by = c("age", "PTV_burden")) %>%
+  mutate(Number_of_People = ifelse(is.na(Number_of_People), 0, Number_of_People))
+
+ages_df_burden_temp = lapply(unique(ages_df_burden$PTV_burden), FUN = function(x){
+  tempdf = ages_df_burden_complete[ages_df_burden_complete$PTV_burden == x, ]
+  for(i in 2:nrow(tempdf)){
+    if(is.na(tempdf$cumulative_cases[i]) & !is.na(tempdf$cumulative_cases[i - 1])){
+      tempdf$cumulative_cases[i] = tempdf$cumulative_cases[i - 1]
+    }
+  }
+  tempdf$cumulative_cases[is.na(tempdf$cumulative_cases)] = 0
+  l = length(ukb_data_cancer$eid[ukb_data_cancer$PTV_burden == x])
+  tempdf$n.people = l - tempdf$cumulative_cases
+  tempdf
+})
+
+ages_df_Burden_complete_2 = do.call(rbind, ages_df_burden_temp)
+
+#Table
+age_datas_burden = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){ 
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$diag_age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  unique_tempdf$PTV_burden[is.na(unique_tempdf$PTV_burden)] = "No data"
+  unique_tempdf %>%
+    filter(cancer_type == x) %>%
+    group_by(PTV_burden, diag_age_in_years) %>%
+    summarise(number_of_cases = n()) %>%
+    group_by(PTV_burden) %>%
+    mutate(cumulative_cases_diag = cumsum(number_of_cases)) %>% 
+    mutate(cancer_type = x, .before = "diag_age_in_years") 
+
+ })
+
+age_table_burden = bind_rows(age_datas_burden)
+age_table_burden_final = age_table_burden %>% 
+  left_join(ages_df_Burden_complete_2, by = c("diag_age_in_years" = "age", "PTV_burden"))
+
+age_table_burden_final$age_associated_incidence = age_table_burden_final$number_of_cases/age_table_burden_final$n.people
+
+rm(age_table_burden, age_datas_burden, ages_df_Burden_complete_2, ages_df_burden_temp, ages_df_burden_complete, temp_df, ages_df_burden)
+
+```
+
+#Burden plots
+```{r}
+
+load("C:/Users/bagil/Desktop/ukb/objects/age_table_burden")
+age_burden_list = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  ggplot(age_table_burden_final[age_table_burden_final$cancer_type == x, ]) + 
+  geom_point(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(PTV_burden))) +
+  geom_smooth(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(PTV_burden))) +
+  ggtitle(label = "Age associated incidence", x) + xlab("Diagnosis age") + ylab("Incidence")
+})
+
+ggarrange(plotlist = age_burden_list, ncol = 5, nrow = 5, common.legend = T)
+ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Incidence/age_incidence_gburden.jpg",  width = 80, height = 40, units = "cm", dpi = 300)
+
+
+
+```
+
+
+
+

@@ -1,0 +1,198 @@
+---
+title: "incidence_from_birth"
+author: "Bagi Laura"
+date: "2024-01-19"
+output: html_document
+---
+
+#Libraries
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(match2C)
+library(dplyr)
+library(plyr)
+library(tidyr)
+library(readxl)
+library(forcats)
+library(survival)
+library(survminer)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(caret)
+library(tidyverse)
+library(conflicted)
+library(lubridate, warn.conflicts = F)
+library(future.apply)
+```
+
+#Files
+```{r}
+load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_final")
+load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
+
+```
+
+#Kaplen-Mayer
+```{r}
+plotlist_2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  surv_obj = with(unique_tempdf, Surv(time_in_days, event = event_indicator))
+  surv_model = survfit(surv_obj ~ 1)
+  figure = ggsurvplot(surv_model, data = unique_tempdf, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"))$plot
+  figure$plot + ylim(1-(nrow(tempdf_x)/nrow(unique_tempdf))- (nrow(tempdf_x)/nrow(unique_tempdf))*0.05, 1)
+  figure
+  })
+ggarrange(plotlist =  plotlist_2, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancersurvival_issue_2.jpg", width = 60, height = 30, units = "cm", dpi = 300)
+
+#With table
+
+c_list = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
+  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
+  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  surv_obj = with(unique_tempdf, Surv(time_in_days, event = event_indicator))
+  surv_model = survfit(surv_obj ~ 1)
+  figure=ggsurvplot(surv_model, data = unique_tempdf, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), risk.table = T)
+  figure$plot + ylim(1-(nrow(tempdf_x)/nrow(unique_tempdf))- (nrow(tempdf_x)/nrow(unique_tempdf))*0.05, 1)
+  figure
+  })
+ggarrange(plotlist = c_list, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancer_issue2_table.jpg", width = 60, height = 30, units = "cm", dpi = 300)
+
+
+```
+
+Cox Model - sex
+```{r}
+cox_model_issue2_sex = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
+  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
+  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  ggsurvplot(survfit(Surv(time_in_days, event_indicator) ~ sex, data = unique_tempdf), pval = T)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ sex, data = unique_tempdf)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+})
+save(file = "C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue2_sex", cox_model_issue2_sex)
+
+```
+
+Cox Model - age
+```{r}
+cox_model_issue2_age = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
+  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, Sys.Date() - tempdf_no_x$birthdate)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  #age_intervals = c(0, 19, 30, 40, 50, 60, 70, 80, Inf)
+  #unique_tempdf$age_cat = cut(unique_tempdf$age_in_years, breaks = age_intervals, labels = F)
+  #unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
+  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
+  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  res.cox = coxph(Surv(age, event_indicator) ~ 1, data = unique_tempdf)
+  figure = ggsurvplot(survfit(res.cox), data = unique_tempdf)
+  figure$plot + ylim(1-(nrow(tempdf_x)/nrow(unique_tempdf)) - (nrow(tempdf_x)/nrow(unique_tempdf))*0.05, 1)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+})
+save(file = "C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue2_age", cox_model_issue2_age)
+
+
+```
+
+Cox Model - ethnic
+```{r}
+
+cox_model_issue2_ethnic = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$age = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  #age_intervals = c(0, 19, 30, 40, 50, 60, 70, 80, Inf)
+  #unique_tempdf$age_cat = cut(unique_tempdf$age_in_years, breaks = age_intervals, labels = F)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
+  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
+  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ ethnic_group, data = unique_tempdf)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+})
+
+save(file = "C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue2_ethnic", cox_model_issue2_ethnic)
+
+```
+
+Cox Model - skin color
+```{r}
+cox_model_issue2_skin = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$age = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
+  #age_intervals = c(0, 19, 30, 40, 50, 60, 70, 80, Inf)
+  #unique_tempdf$age_cat = cut(unique_tempdf$age_in_years, breaks = age_intervals, labels = F)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
+  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
+  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ s.color, data = unique_tempdf)
+  figure = ggsurvplot(survfit(res.cox), data = unique_tempdf)
+  figure$plot + ylim(1-(nrow(tempdf_x)/nrow(unique_tempdf)) - (nrow(tempdf_x)/nrow(unique_tempdf))*0.05, 1)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+})
+
+save(file ="C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue2_skin", cox_model_issue2_skin)
+
+```
+
+
+
+
+
