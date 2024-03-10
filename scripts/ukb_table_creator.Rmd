@@ -7,12 +7,8 @@ output: html_document
 
 Libaries
 ```{r}
-library(ggplot2)
 library(ggpubr)
-library(match2C)
-library(dplyr)
-library(plyr)
-library(tidyr)
+library(fastmatch)
 library(readxl)
 library(forcats)
 library(survival)
@@ -22,9 +18,9 @@ library(gridExtra)
 library(data.table)
 library(caret)
 library(tidyverse)
-library(conflicted)
-library(lubridate, warn.conflicts = F)
 library(future.apply)
+library(magrittr)
+options(dplyr.summarise.inform = F)
 
 ```
 
@@ -375,6 +371,33 @@ load("C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
 
 ```
 
+#Add PTVs
+```{r}
+genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/MAF_1percent_all_retained_variants_PTVBurden_final_mapped.tsv")
 
+#PTV burdens
+
+#ukb_data_cancer$PTV_burden = cut(ukb_data_cancer$PTV_burden_of_MAF_1_percent, breaks = c(min(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T), median(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T), max(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T)), labels = c("Low", "High"), include.lowest = T, right = T)
+
+colnames(genetic_PTV)[c(1,3)] = c("eid", "PTV_burden")
+genetic_PTV = genetic_PTV[,c("eid", "PTV_burden")]
+
+ukb_data_cancer$PTV_burden = genetic_PTV$PTV_burden[fmatch(ukb_data_cancer$eid, genetic_PTV$eid)]
+
+
+#3 different group
+ukb_data_cancer$PTV_burden_group = cut(ukb_data_cancer$PTV_burden, breaks = quantile(ukb_data_cancer$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
+
+ukb_data_cancer$PTV_burden_group_2 = cut(ukb_data_cancer$PTV_burden, breaks = c(min(ukb_data_cancer$PTV_burden), 8, 19, max(ukb_data_cancer$PTV_burden)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
+table(ukb_data_cancer$PTV_burden_group_2)
+
+ukb_data_cancer$PTV_burden_group_3 = cut(ukb_data_cancer$PTV_burden, breaks = c(min(ukb_data_cancer$PTV_burden), 6, 30, max(ukb_data_cancer$PTV_burden)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
+table(ukb_data_cancer$PTV_burden_group_3)
+
+ukb_data_cancer %<>% 
+  filter(!is.na(PTV_burden))
+
+
+```
 
 

@@ -29,7 +29,7 @@ library(future.apply)
 
 #Files
 ```{r}
-load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_final")
+load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_cancer_final")
 load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
 
 ```
@@ -37,9 +37,9 @@ load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
 #Kaplen-Mayer
 ```{r}
 plotlist_2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
-  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
@@ -58,9 +58,9 @@ ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancersurvival_issu
 #With table
 
 c_list = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
-  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
@@ -85,9 +85,9 @@ ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancer_issue2_table
 Cox Model - sex
 ```{r}
 cox_model_issue2_sex = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
-  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
@@ -108,10 +108,10 @@ save(file = "C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue2_sex", cox_model_
 Cox Model - age
 ```{r}
 cox_model_issue2_age = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
-  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = arrange(tempdf_x, diag_date)
   tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
-  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, Sys.Date() - tempdf_no_x$birthdate)
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
@@ -139,9 +139,9 @@ Cox Model - ethnic
 ```{r}
 
 cox_model_issue2_ethnic = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
-  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
@@ -166,9 +166,9 @@ save(file = "C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue2_ethnic", cox_mod
 Cox Model - skin color
 ```{r}
 cox_model_issue2_skin = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
-  tempdf_x = subset(ukb_data, cancer_type == x)
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
