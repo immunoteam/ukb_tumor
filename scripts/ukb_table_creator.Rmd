@@ -395,7 +395,8 @@ ukb_data_cancer$PTV_burden_group_3 = cut(ukb_data_cancer$PTV_burden, breaks = c(
 table(ukb_data_cancer$PTV_burden_group_3)
 
 ukb_data_cancer %<>% 
-  filter(!is.na(PTV_burden))
+  dplyr::filter(!is.na(PTV_burden))
+
 
 
 ```

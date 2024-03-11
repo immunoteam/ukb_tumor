@@ -28,9 +28,8 @@ options(dplyr.summarise.inform = F)
 ```{r}
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/genetic_pca_clean")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/genetic_burden")
-genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/MAF_1percent_all_retained_variants_PTVBurden_final_mapped.tsv")
+
+
 
 ```
 
@@ -412,7 +411,7 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/age_incidence_et
 ```
 
 
-#Include genetic burden group 1
+#Include PTV burden group 1
 ```{r}
 
 #Ages and burdens

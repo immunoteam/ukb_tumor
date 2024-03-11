@@ -38,7 +38,7 @@ load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
 ```{r}
 plotlist_2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
   tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
@@ -47,13 +47,13 @@ plotlist_2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
   unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
   surv_obj = with(unique_tempdf, Surv(time_in_days, event = event_indicator))
-  surv_model = survfit(surv_obj ~ 1)
+  surv_model = survfit(surv_obj ~ 1, data = unique_tempdf)
   figure = ggsurvplot(surv_model, data = unique_tempdf, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"))$plot
-  figure$plot + ylim(1-(nrow(tempdf_x)/nrow(unique_tempdf))- (nrow(tempdf_x)/nrow(unique_tempdf))*0.05, 1)
+  figure = figure + ylim(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1)
   figure
   })
-ggarrange(plotlist =  plotlist_2, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancersurvival_issue_2.jpg", width = 60, height = 30, units = "cm", dpi = 300)
+ggarrange(plotlist =  plotlist_2, ncol = 5, nrow = 5, common.legend = T)
+ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancersurvival_issue_2.jpg", width = 80, height = 40, units = "cm", dpi = 300)
 
 #With table
 
@@ -81,6 +81,83 @@ ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancer_issue2_table
 
 
 ```
+
+#PTV burden group 3
+```{r}
+plotlist_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  surv_obj = with(unique_tempdf, Surv(time_in_days, event = event_indicator))
+  surv_model = survfit(surv_obj ~ PTV_burden_group_3, data = unique_tempdf)
+  figure = ggsurvplot(surv_model, data = unique_tempdf, pval = T, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"))$plot
+  figure = figure + ylim(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1)
+  figure
+  })
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5, common.legend = T)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g3_surv.jpg", width = 80, height = 40, units = "cm", dpi = 300)
+
+
+```
+
+#PTV burden group 2
+```{r}
+plotlist_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  surv_obj = with(unique_tempdf, Surv(time_in_days, event = event_indicator))
+  surv_model = survfit(surv_obj ~ PTV_burden_group_2, data = unique_tempdf)
+  figure = ggsurvplot(surv_model, data = unique_tempdf, pval = T,title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"))$plot
+  figure = figure + ylim(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1)
+  figure
+  })
+
+ggarrange(plotlist =  plotlist_PTV2, ncol = 5, nrow = 5, common.legend = T)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g2_surv.jpg", width = 80, height = 40, units = "cm", dpi = 300)
+
+
+```
+
+#PTV burden group 1
+```{r}
+plotlist_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$birthdate, Sys.Date() - unique_tempdf$birthdate))
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  surv_obj = with(unique_tempdf, Surv(time_in_days, event = event_indicator))
+  surv_model = survfit(surv_obj ~ PTV_burden_group, data = unique_tempdf)
+  figure = ggsurvplot(surv_model, data = unique_tempdf, pval = T,title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"))$plot
+  figure = figure + ylim(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1)
+  figure
+  })
+
+ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5, common.legend = T)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g1_surv.jpg", width = 80, height = 40, units = "cm", dpi = 300)
+
+
+```
+
+
 
 Cox Model - sex
 ```{r}

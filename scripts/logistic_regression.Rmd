@@ -179,3 +179,25 @@ log_reg_model_burden = sapply(X = unique(icd_mapping$cancer_type), FUN = functio
 })
 ```
 
+#PTV burdens group 1
+```{r}
+
+log_reg_model_burden_g1 = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf$cancer_log = unique_tempdf$cancer_type == x
+  #unique_tempdf = dplyr::filter(unique_tempdf, PTV_burden == "Low")
+  model = glm(cancer_log ~ sex + PTV_burden_group, data =unique_tempdf, family = binomial)
+  summary(model)
+  summary(model)$coef
+  coef(summary(model))[4]
+})
+
+
+```
+
