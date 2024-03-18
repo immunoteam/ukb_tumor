@@ -374,6 +374,7 @@ load("C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
 #Add PTVs
 ```{r}
 genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/MAF_1percent_all_retained_variants_PTVBurden_final_mapped.tsv")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
 
 #PTV burdens
 
@@ -382,9 +383,8 @@ genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/MAF_1percent_all_retaine
 colnames(genetic_PTV)[c(1,3)] = c("eid", "PTV_burden")
 genetic_PTV = genetic_PTV[,c("eid", "PTV_burden")]
 
+#UKB datas
 ukb_data_cancer$PTV_burden = genetic_PTV$PTV_burden[fmatch(ukb_data_cancer$eid, genetic_PTV$eid)]
-
-
 #3 different group
 ukb_data_cancer$PTV_burden_group = cut(ukb_data_cancer$PTV_burden, breaks = quantile(ukb_data_cancer$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
 
@@ -398,6 +398,21 @@ ukb_data_cancer %<>%
   dplyr::filter(!is.na(PTV_burden))
 
 
+#Cancer datas
+cancer_data$PTV_burden = genetic_PTV$PTV_burden[fmatch(cancer_data$eid, genetic_PTV$eid)]
+#3 different group
+cancer_data$PTV_burden_group = cut(cancer_data$PTV_burden, breaks = quantile(cancer_data$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
+
+cancer_data$PTV_burden_group_2 = cut(cancer_data$PTV_burden, breaks = c(min(cancer_data$PTV_burden), 8, 19, max(cancer_data$PTV_burden)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
+table(cancer_data$PTV_burden_group_2)
+
+cancer_data$PTV_burden_group_3 = cut(cancer_data$PTV_burden, breaks = c(min(cancer_data$PTV_burden), 6, 30, max(cancer_data$PTV_burden)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
+table(cancer_data$PTV_burden_group_3)
+
+cancer_data %<>% 
+  dplyr::filter(!is.na(PTV_burden))
+
+save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
 
 ```
 
