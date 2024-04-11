@@ -28,24 +28,27 @@ options(dplyr.summarise.inform = F)
 ```{r}
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
 load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 
 ```
 
 
-#Survival analysis
+#Survival analysis for PTV burden group 1
 ```{r}
 cancer_surv_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
-  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$diag_date), temp_can$diag_date - temp_can$birthdate, max(temp_can$date_of_death, na.rm = T) - temp_can$birthdate))
+  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group, data = temp_can))
+  temp_can$PTV_burden_group = factor(temp_can$PTV_burden_group, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group,data = temp_can))
   args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
   pfit = do.call(ggsurvplot, args)
   tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
+
 
 ggarrange(plotlist =  cancer_surv_PTV1, ncol = 5, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g1_surv_cancer.jpg", width = 100, height = 50, units = "cm", dpi = 300)
@@ -53,15 +56,16 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_bur
 
 ```
 
-
+#Survival analysis for PTV burden group 2
 ```{r}
 
 cancer_surv_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
-  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$diag_date), temp_can$diag_date - temp_can$birthdate, max(temp_can$date_of_death, na.rm = T) - temp_can$birthdate))
+  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can$PTV_burden_group_2 = factor(temp_can$PTV_burden_group_2, ordered = T)
   fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_2, data = temp_can))
   args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
   pfit = do.call(ggsurvplot, args)
@@ -74,15 +78,16 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_bur
 
 ```
 
-
+#Survival analysis for PTV burden group 3
 ```{r}
 
 cancer_surv_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
-  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$diag_date), temp_can$diag_date - temp_can$birthdate, max(temp_can$date_of_death, na.rm = T) - temp_can$birthdate))
+  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can$PTV_burden_group_3 = factor(temp_can$PTV_burden_group_3, ordered = T)
   fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_3, data = temp_can))
   args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
   pfit = do.call(ggsurvplot, args)
@@ -92,6 +97,73 @@ cancer_surv_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x)
 
 ggarrange(plotlist =  cancer_surv_PTV3, ncol = 5, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g3_surv_cancer.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+
+
+```
+
+#Survival analysis for PTV burden group 4
+```{r}
+
+cancer_surv_PTV4 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can$PTV_burden_group_4 = cut(temp_can$PTV_burden, breaks = quantile(temp_can$PTV_burden, c(0, 0.05, 0.95, 1)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_4, data = temp_can))
+  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_4, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+ggarrange(plotlist =  cancer_surv_PTV4, ncol = 5, nrow = 5)
+
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g4_surv_cancer.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+
+#temp_can$PTV_burden_group_4 = cut(temp_can$PTV_burden, breaks = quantile(temp_can$PTV_burden, c(0, 0.01, 0.99, 1)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
+
+```
+
+#All tumor survival analysis
+```{r}
+cancer_data$cancer_log = !is.na(cancer_data$cancer_type)
+
+temp_df_2 = data.frame(eid = cancer_data$eid,
+                       Time_in_days = as.numeric(ifelse(!is.na(cancer_data$date_of_death), cancer_data$date_of_death -cancer_data$diag_date, max(cancer_data$date_of_death, na.rm = T) - cancer_data$diag_date)),
+                       Event_indicator = ifelse(cancer_data$cancer_log == T, 1, 0),
+                       PTV_burden_group = cancer_data$PTV_burden_group,
+                       PTV_burden_group_2 = cancer_data$PTV_burden_group_2,
+                       PTV_burden_group_3 = cancer_data$PTV_burden_group_3)
+
+
+
+temp_df_2 %<>%
+  group_by(eid) %>%
+  summarize(
+    Time_in_days = first(Time_in_days),
+    Event_indicator = first(Event_indicator),
+    PTV_burden_group = first(PTV_burden_group),
+    PTV_burden_group_2 = first(PTV_burden_group_2),
+    PTV_burden_group_3 = first(PTV_burden_group_3)
+  )
+
+
+fit_1 = survfit(Surv(Time_in_days, event = Event_indicator) ~ PTV_burden_group, data = temp_df_2)
+PTV_g1_cancer_surv = ggsurvplot(fit_1, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 1)"))
+
+print(PTV_g1_cancer_surv)
+
+fit_2 = survfit(Surv(Time_in_days, event = Event_indicator) ~ PTV_burden_group_2, data = temp_df_2)
+PTV_g2_cancer_surv = ggsurvplot(fit_2, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 2)"))
+
+print(PTV_g2_cancer_surv)
+
+fit_3 = survfit(Surv(Time_in_days, event = Event_indicator) ~ PTV_burden_group_3, data = temp_df_2)
+PTV_g3_cancer_surv = ggsurvplot(fit_3, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 3)"))
+
+print(PTV_g3_cancer_surv)
+
 
 
 ```
