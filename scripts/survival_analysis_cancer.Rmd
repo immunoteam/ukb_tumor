@@ -56,7 +56,7 @@ cancer_surv_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x)
 
 
 ggarrange(plotlist =  cancer_surv_PTV1, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g1_surv_cancer.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g1_surv_cancer.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```
@@ -83,7 +83,7 @@ cancer_surv_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x)
 })
 
 ggarrange(plotlist =  cancer_surv_PTV2, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g2_surv_cancer.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g2_surv_cancer.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 ```
 
@@ -109,7 +109,7 @@ cancer_surv_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x)
 })
 
 ggarrange(plotlist =  cancer_surv_PTV3, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g3_surv_cancer.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g3_surv_cancer.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```
@@ -174,16 +174,16 @@ temp_df_1$event_indicator = ifelse(temp_df_1$death == T, 1, 0)
 
 fit_4 = survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group, data = temp_df_1)
 PTV_g1_cancer_surv_death = ggsurvplot(fit_4, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 1)"))
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g1_tumor_surv.jpg", plot = PTV_g1_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g1_tumor_surv.png", plot = PTV_g1_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
 
 fit_5 = survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_2, data = temp_df_1)
 PTV_g2_cancer_surv_death = ggsurvplot(fit_5, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 2)"))
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g2_tumor_surv.jpg", plot = PTV_g2_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g2_tumor_surv.png", plot = PTV_g2_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
 fit_6 = survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_3, data = temp_df_1)
 PTV_g3_cancer_surv_death = ggsurvplot(fit_6, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 3)"))
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g3_tumor_surv.jpg", plot = PTV_g3_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g3_tumor_surv.png", plot = PTV_g3_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
 
 
@@ -194,7 +194,7 @@ PTV_plot_list_combined = c(PTV_plot_list_surv, PTV_risk_list_surv)
 grid.arrange(grobs = PTV_plot_list_combined, ncol = 3)
 plot_grid(plotlist = PTV_plot_list_combined, ncol = 3)
 
-ggsave(filename ="C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_all_surv.jpg", width = 100, height = 50, units = "cm", dpi = 300 )
+ggsave(filename ="C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_all_surv.png", width = 100, height = 50, units = "cm", dpi = 300 )
 
 
 ```

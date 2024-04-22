@@ -319,7 +319,7 @@ plotlist_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
 })
 
 ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_burden_g1_attending.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending//PTV_burden_g1_attending.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```
@@ -351,7 +351,7 @@ plotlist_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
 })
 
 ggarrange(plotlist =  plotlist_PTV2, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/PTV_burden_g2_attending.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/PTV_burden_g2_attending.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 ```
 
@@ -381,7 +381,7 @@ plotlist_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
 })
 
 ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_burden_g3_attending.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/PTV_burden_g3_attending.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```

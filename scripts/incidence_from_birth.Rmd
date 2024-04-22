@@ -109,7 +109,7 @@ plotlist_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
 
 ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
 
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g3_surv.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/PTV_burden_g3_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 #+ annotate(geom = "text", x = 1000, y = 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05 , color = "black", label = pvalueA, size = 5)
@@ -148,7 +148,7 @@ plotlist_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
 })
 
 ggarrange(plotlist =  plotlist_PTV2, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g2_surv.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/PTV_burden_g2_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```
@@ -178,7 +178,7 @@ plotlist_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
 })
 
 ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_burden_g1_surv.jpg", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/PTV_burden_g1_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```
@@ -223,15 +223,15 @@ temp_df_2 %<>%
 fit_1 = survfit(Surv(time_in_days, event = has_cancer) ~ PTV_burden_group, data = temp_df_2)
 PTV_g1_cancer_surv = ggsurvplot(fit_1, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Incidence Analysis for Tumors (PTV burden group 1)"))
 PTV_g1_cancer_surv$plot
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_g1_tumor_incidence.jpg", plot = PTV_g1_cancer_surv$plot, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_g1_tumor_incidence.png", plot = PTV_g1_cancer_surv$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
 fit_2 = survfit(Surv(time_in_days, event = has_cancer) ~ PTV_burden_group_2, data = temp_df_2)
 PTV_g2_cancer_surv = ggsurvplot(fit_2, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Incidence Analysis for Tumors (PTV burden group 2)"))
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_g2_tumor_incidence.jpg", plot = PTV_g2_cancer_surv$plot, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_g2_tumor_incidence.png", plot = PTV_g2_cancer_surv$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
 fit_3 = survfit(Surv(time_in_days, event = has_cancer) ~ PTV_burden_group_3, data = temp_df_2)
 PTV_g3_cancer_surv = ggsurvplot(fit_3, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Incidence Analysis for Tumors (PTV burden group 3)"))
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_g3_tumor_incidence.jpg", plot = PTV_g3_cancer_surv$plot, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_g3_tumor_incidence.png", plot = PTV_g3_cancer_surv$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
 PTV_plot_list_inc = list(PTV_g1_cancer_surv$plot, PTV_g2_cancer_surv$plot, PTV_g3_cancer_surv$plot)
 PTV_risk_list_inc = list(PTV_g1_cancer_surv$table, PTV_g2_cancer_surv$table, PTV_g3_cancer_surv$table)
@@ -241,7 +241,7 @@ grid.arrange(grobs = PTV_plot_list_combined_inc, ncol = 3)
 plot_grid(plotlist = PTV_plot_list_combined_inc, ncol = 3)
 
 
-ggsave(filename ="C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_cancer_incidence.jpg", width = 100, height = 50, units = "cm", dpi = 300 )
+ggsave(filename ="C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/PTV_cancer_incidence.png", width = 100, height = 50, units = "cm", dpi = 300 )
 
 
 ```
