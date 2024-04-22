@@ -20,6 +20,7 @@ library(caret)
 library(tidyverse)
 library(future.apply)
 library(magrittr)
+library(cowplot)
 options(dplyr.summarise.inform = F)
 
 ```
@@ -38,7 +39,11 @@ load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 cancer_surv_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
-  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   temp_can$PTV_burden_group = factor(temp_can$PTV_burden_group, ordered = T)
@@ -62,7 +67,11 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_bur
 cancer_surv_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
-  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   temp_can$PTV_burden_group_2 = factor(temp_can$PTV_burden_group_2, ordered = T)
@@ -84,7 +93,11 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_bur
 cancer_surv_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
-  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   temp_can$PTV_burden_group_3 = factor(temp_can$PTV_burden_group_3, ordered = T)
@@ -107,7 +120,11 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_bur
 cancer_surv_PTV4 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
-  temp_can$time_in_days = as.numeric(ifelse(!is.na(temp_can$date_of_death), temp_can$date_of_death - temp_can$diag_date, max(temp_can$date_of_death, na.rm = T) - temp_can$diag_date))
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   temp_can$PTV_burden_group_4 = cut(temp_can$PTV_burden, breaks = quantile(temp_can$PTV_burden, c(0, 0.05, 0.95, 1)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
@@ -127,43 +144,69 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_bur
 
 #All tumor survival analysis
 ```{r}
-cancer_data$cancer_log = !is.na(cancer_data$cancer_type)
-
-temp_df_2 = data.frame(eid = cancer_data$eid,
-                       Time_in_days = as.numeric(ifelse(!is.na(cancer_data$date_of_death), cancer_data$date_of_death -cancer_data$diag_date, max(cancer_data$date_of_death, na.rm = T) - cancer_data$diag_date)),
-                       Event_indicator = ifelse(cancer_data$cancer_log == T, 1, 0),
+temp_df_1 = data.frame(eid = cancer_data$eid,
+                       birthdate = cancer_data$birthdate,
+                       date_of_death = cancer_data$date_of_death,
+                       diag_date = cancer_data$diag_date,
+                       death = cancer_data$death,
+                       cancer_type = cancer_data$cancer_type,
                        PTV_burden_group = cancer_data$PTV_burden_group,
                        PTV_burden_group_2 = cancer_data$PTV_burden_group_2,
                        PTV_burden_group_3 = cancer_data$PTV_burden_group_3)
 
-
-
-temp_df_2 %<>%
+temp_df_1 %<>%
   group_by(eid) %>%
   summarize(
-    Time_in_days = first(Time_in_days),
-    Event_indicator = first(Event_indicator),
+    birthdate = first(birthdate),
+    date_of_death = first(date_of_death),
+    diag_date = first(diag_date),
+    death = first(death),
     PTV_burden_group = first(PTV_burden_group),
     PTV_burden_group_2 = first(PTV_burden_group_2),
-    PTV_burden_group_3 = first(PTV_burden_group_3)
-  )
+    PTV_burden_group_3 = first(PTV_burden_group_3))
+
+temp_df_1 %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+temp_df_1$event_indicator = ifelse(temp_df_1$death == T, 1, 0)
+
+fit_4 = survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group, data = temp_df_1)
+PTV_g1_cancer_surv_death = ggsurvplot(fit_4, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 1)"))
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g1_tumor_surv.jpg", plot = PTV_g1_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
 
-fit_1 = survfit(Surv(Time_in_days, event = Event_indicator) ~ PTV_burden_group, data = temp_df_2)
-PTV_g1_cancer_surv = ggsurvplot(fit_1, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 1)"))
+fit_5 = survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_2, data = temp_df_1)
+PTV_g2_cancer_surv_death = ggsurvplot(fit_5, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 2)"))
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g2_tumor_surv.jpg", plot = PTV_g2_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
-print(PTV_g1_cancer_surv)
+fit_6 = survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_3, data = temp_df_1)
+PTV_g3_cancer_surv_death = ggsurvplot(fit_6, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 3)"))
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_g3_tumor_surv.jpg", plot = PTV_g3_cancer_surv_death$plot, width = 60, height = 30, units = "cm", dpi = 300)
 
-fit_2 = survfit(Surv(Time_in_days, event = Event_indicator) ~ PTV_burden_group_2, data = temp_df_2)
-PTV_g2_cancer_surv = ggsurvplot(fit_2, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 2)"))
 
-print(PTV_g2_cancer_surv)
 
-fit_3 = survfit(Surv(Time_in_days, event = Event_indicator) ~ PTV_burden_group_3, data = temp_df_2)
-PTV_g3_cancer_surv = ggsurvplot(fit_3, risk.table = T, pval = T, tables.theme = clean_theme(), title = paste0("Survival Analysis for Tumors (PTV burden group 3)"))
+PTV_plot_list_surv = list(PTV_g1_cancer_surv_death$plot, PTV_g2_cancer_surv_death$plot, PTV_g3_cancer_surv_death$plot)
+PTV_risk_list_surv = list(PTV_g1_cancer_surv_death$table, PTV_g2_cancer_surv_death$table, PTV_g3_cancer_surv_death$table)
+PTV_plot_list_combined = c(PTV_plot_list_surv, PTV_risk_list_surv)
 
-print(PTV_g3_cancer_surv)
+grid.arrange(grobs = PTV_plot_list_combined, ncol = 3)
+plot_grid(plotlist = PTV_plot_list_combined, ncol = 3)
 
+ggsave(filename ="C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_all_surv.jpg", width = 100, height = 50, units = "cm", dpi = 300 )
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
 
 
 ```

@@ -430,7 +430,16 @@ genetic_PTV_genes = genetic_PTV[,c("eid", "PTV_burden", "Genes", "Variants")]
 ukb_data_cancer$PTV_burden_Genes = genetic_PTV_genes$Genes[fmatch(ukb_data_cancer$eid, genetic_PTV$eid)]
 ukb_data_cancer$PTV_burden_var = genetic_PTV_genes$Variants[fmatch(ukb_data_cancer$eid, genetic_PTV_genes$eid)]
 
-
+#P-value
+pvalconvert = function(p) {
+  if(p < 0.001) {
+    tempnum = formatC(p, format = "e", digits = 1)
+    out = c(strsplit(tempnum, split = "e")[[1]][1], as.numeric(strsplit(tempnum, split = "e")[[1]][2]))
+  } else {
+    out = round(p, 3)
+  }
+  out
+}
 
 ```
 
@@ -472,3 +481,33 @@ cancer_PTV_coef = rbind(cancer_PTV_g1_df, cancer_PTV_g2_df, cancer_PTV_g3_df)
 save(cancer_PTV_coef, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_combined")
 
 ```
+
+#PTV median
+```{r}
+
+
+ukb_data_cancer$PTV_burden_group = cut(ukb_data_cancer$PTV_burden, breaks = quantile(ukb_data_cancer$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
+
+tumor_PTV_median = apply(X = unique(icd_mapping$cancer_type))
+
+
+
+filtered_PTVs_20 = ukb_data_cancer %>%
+  filter(PTV_burden <= 20)
+
+filtered_PTVs_80 = ukb_data_cancer %>% 
+  filter(PTV_burden >= 80)
+
+
+
+median_PTV_tumor = filtered_PTVs %>%
+  group_by(cancer_type) %>%
+  summarize(median_PTV = median(PTV_burden))
+
+median_PTV_tumor_80 = filtered_PTVs_80 %>% 
+  group_by(cancer_type) %>% 
+  summarise(median_PTV = median(PTV_burden))
+
+
+```
+
