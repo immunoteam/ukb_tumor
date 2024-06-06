@@ -22,6 +22,8 @@ library(future.apply)
 library(magrittr)
 library(xml2)
 library(purrr)
+library(archive)
+library(utils)
 options(dplyr.summarise.inform = F)
 
 ```
@@ -353,10 +355,11 @@ cancer_data$ICD10_codes = substr(cancer_data$ICD10, 1, 3)
 #matching
 ukb_data_cancer$cancer_type = icd_mapping$cancer_type[match(ukb_data_cancer$ICD10_codes, icd_mapping$ICD10)]
 cancer_data$cancer_type = icd_mapping$cancer_type[match(cancer_data$ICD10_codes, icd_mapping$ICD10)]
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
 rm(cancer_data_f)
 
 
-save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/ukb/objects/ukb_data_cancer_final")
+save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 save(cancer_data, file = "C:/Users/bagil/Desktop/ukb/objects/cancer_data_final")
 ```
 
@@ -375,9 +378,29 @@ load("C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
 
 #Add PTVs
 ```{r}
-genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/MAF_1percent_all_retained_variants_PTVBurden_final_mapped.tsv")
+genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/specific_ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.7z")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final") 
+
+
+file_path <- "C:/Users/bagil/Desktop/ukb/rawdata/specific_ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.7z"
+
+custom_dir <- "C:/Users/bagil/Desktop/extracted_files"
+if (!dir.exists(custom_dir)) {
+  dir.create(custom_dir)
+}
+
+
+cmd <- paste0('"C:/Program Files/7-Zip/7z.exe" e "', file_path, '" -o"', custom_dir, '" -y')
+system(cmd)
+
+extracted_files <- list.files(custom_dir, full.names = TRUE)
+print(extracted_files)
+
+if(length(extracted_files) > 0) {
+  data <- read.csv(extracted_files[1])
+  print(head(data))
+}
 
 #PTV burdens
 
@@ -420,7 +443,7 @@ save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_
 
 ```
 
-
+#PTV genes
 ```{r}
 genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/MAF_1percent_all_retained_variants_PTVBurden_final_mapped.tsv")
 
@@ -460,7 +483,7 @@ antigenedf = data.frame(ID = id, Names = names, Type = type, Link = link)
 
 ```
 
-
+#PTV and antigene
 ```{r}
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/antigenedf")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/genetic_PTV_genes")
@@ -469,8 +492,7 @@ load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/genetic_PTV_genes")
 
 ```
 
-
-#PTV coef table
+#PTV coef table:incidence from birth
 ```{r}
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g1")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g2")
@@ -482,17 +504,50 @@ save(cancer_PTV_coef, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/can
 
 ```
 
+#PTV coef table: incidence from attending
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g1_attending")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g2_attending")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g3_attending")
+
+cancer_PTV_coef_attending = rbind(cancer_PTV_g1_a_df, cancer_PTV_g2_a_df, cancer_PTV_g3_a_df)
+
+save(cancer_PTV_coef_attending, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_attending_combined")
+
+```
+
+#PTV coef table: surv analysis
+```{r}
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv_g1")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv_g2")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv_g3")
+
+cancer_PTV_coef_surv = rbind(cancer_PTV_surv_g1_df, cancer_PTV_surv_g2_df, cancer_PTV_surv_g3_df)
+
+save(cancer_PTV_coef_surv, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv_combined")
+
+```
+
 #PTV median
 ```{r}
 
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
 
 ukb_data_cancer$PTV_burden_group = cut(ukb_data_cancer$PTV_burden, breaks = quantile(ukb_data_cancer$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
 
-tumor_PTV_median = apply(X = unique(icd_mapping$cancer_type))
+tumor_PTV_median = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  temp_df = subset(cancer_data, cancer_type == x)
+  temp_df = dplyr::arrange(temp_df, diag_date)
+  temp_df = temp_df[!duplicated(temp_df$eid), ]
+  temp_df$PTV_burden_median = cut(temp_df$PTV_burden, breaks = quantile(temp_df$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
+})
 
 
 
-filtered_PTVs_20 = ukb_data_cancer %>%
+filtered_PTVs_20 = cancer_data %>%
   filter(PTV_burden <= 20)
 
 filtered_PTVs_80 = ukb_data_cancer %>% 
@@ -500,13 +555,34 @@ filtered_PTVs_80 = ukb_data_cancer %>%
 
 
 
-median_PTV_tumor = filtered_PTVs %>%
+median_PTV_tumor = cancer_data %>%
   group_by(cancer_type) %>%
-  summarize(median_PTV = median(PTV_burden))
+  summarise(median_PTV = median(PTV_burden))
+
+median_PTV_tumor = filtered_PTVs_20 %>%
+  group_by(cancer_type) %>%
+  summarise(median_PTV = median(PTV_burden))
+
 
 median_PTV_tumor_80 = filtered_PTVs_80 %>% 
   group_by(cancer_type) %>% 
   summarise(median_PTV = median(PTV_burden))
+
+
+ 
+
+
+```
+
+
+
+```{r}
+
+ukb_data_cancer %>% 
+  group_by(PTV_burden, cancer_type) %>% 
+  summarise(n = n()) %>% 
+  View()
+
 
 
 ```

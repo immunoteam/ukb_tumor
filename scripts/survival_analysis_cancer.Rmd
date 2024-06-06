@@ -52,7 +52,7 @@ cancer_surv_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x)
   pfit = do.call(ggsurvplot, args)
   tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
-})
+  })
 
 
 ggarrange(plotlist =  cancer_surv_PTV1, ncol = 5, nrow = 5)
@@ -199,15 +199,134 @@ ggsave(filename ="C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_canc
 
 ```
 
-
+#PTV cox model
 ```{r}
 
+coxregfun_surv = function(x) {
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can$PTV_burden = factor(temp_can$PTV_burden, ordered = T)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden, data = temp_can)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value)
+}
+
+result_list_surv = lapply(unique(icd_mapping$cancer_type), coxregfun_surv)
+
+
+cancer_PTV_surv_df = do.call(rbind, result_list_surv)
+save(cancer_PTV_surv_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv")
+
+```
+
+#PTV cox model group 1
+```{r}
+
+coxregfun_surv_g1 = function(x) {
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can$PTV_burden_group = factor(temp_can$PTV_burden_group, ordered = T)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden_group, data = temp_can)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value)
+}
+
+result_list_surv_g1 = lapply(unique(icd_mapping$cancer_type), coxregfun_surv_g1)
+
+
+cancer_PTV_surv_g1_df = do.call(rbind, result_list_surv_g1)
+save(cancer_PTV_surv_g1_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv_g1")
+
+```
+
+#PTV cox model group 2
+```{r}
+
+coxregfun_surv_g2 = function(x) {
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can$PTV_burden_group_2 = factor(temp_can$PTV_burden_group_2, ordered = T)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden_group_2, data = temp_can)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value)
+}
+
+result_list_surv_g2 = lapply(unique(icd_mapping$cancer_type), coxregfun_surv_g2)
+
+
+cancer_PTV_surv_g2_df = do.call(rbind, result_list_surv_g2)
+save(cancer_PTV_surv_g2_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv_g2")
+
+```
+
+#PTV cox model group 3
+```{r}
+
+coxregfun_surv_g3 = function(x) {
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can$PTV_burden_group_3 = factor(temp_can$PTV_burden_group_3, ordered = T)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden_group_3, data = temp_can)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value)
+}
+
+result_list_surv_g3 = lapply(unique(icd_mapping$cancer_type), coxregfun_surv_g3)
+
+
+cancer_PTV_surv_g3_df = do.call(rbind, result_list_surv_g3)
+save(cancer_PTV_surv_g3_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_surv_g3")
 
 ```
 
 
-```{r}
 
-
-```
 

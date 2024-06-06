@@ -160,17 +160,18 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_bur
 ```{r}
 cox_model_issue3_sex = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
-  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$attending_1, max(unique_tempdf$date_of_death, na.rm = T) - unique_tempdf$attending_1))
-  unique_tempdf = unique_tempdf[unique_tempdf$time_in_days >= 0, ,drop = F]
-  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
-  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
-  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
-  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - attending_1,
+      death == T & is.na(diag_date) ~ date_of_death - attending_1,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - attending_1,
+    )) %>% 
+    filter(time_in_days >= 0)
   unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x & unique_tempdf$p_cause_of_death == x, 1, 0)
   res.cox = coxph(Surv(time_in_days, event_indicator) ~ sex, data = unique_tempdf)
   c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
@@ -237,21 +238,18 @@ save(file = "C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue3_age_2", cox_mode
 ```{r}
 cox_model_issue3_ethnic = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
-  unique_tempdf$age = as.numeric(ifelse(!is.na(unique_tempdf$attending_1), unique_tempdf$attending_1 - unique_tempdf$birthdate, max(unique_tempdf$date_of_death, na.rm = T) - unique_tempdf$birthdate))
-  unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
-  #age_intervals = c(0, 19, 30, 40, 50, 60, 70, 80, Inf)
-  #unique_tempdf$age_cat = cut(unique_tempdf$age_in_years, breaks = age_intervals, labels = F)
-  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$attending_1, max(unique_tempdf$date_of_death, na.rm = T) - unique_tempdf$attending_1))
-  unique_tempdf = unique_tempdf[unique_tempdf$time_in_days >= 0, ,drop = F]
-  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
-  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
-  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
-  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - attending_1,
+      death == T & is.na(diag_date) ~ date_of_death - attending_1,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - attending_1,
+    )) %>% 
+    filter(time_in_days >= 0)
   unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
   res.cox = coxph(Surv(time_in_days, event_indicator) ~ ethnic_group, data = unique_tempdf)
   c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
@@ -265,21 +263,18 @@ save(file = "C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue3_ethnic", cox_mod
 
 cox_model_issue3_skin = sapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
-  unique_tempdf$age = as.numeric(ifelse(!is.na(unique_tempdf$attending_1), unique_tempdf$attending_1 - unique_tempdf$birthdate, max(unique_tempdf$date_of_death, na.rm = T) - unique_tempdf$birthdate))
-  unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
-  #age_intervals = c(0, 19, 30, 40, 50, 60, 70, 80, Inf)
-  #unique_tempdf$age_cat = cut(unique_tempdf$age_in_years, breaks = age_intervals, labels = F)
-  unique_tempdf$time_in_days = as.numeric(ifelse(!is.na(unique_tempdf$diag_date), unique_tempdf$diag_date - unique_tempdf$attending_1, max(unique_tempdf$date_of_death, na.rm = T) - unique_tempdf$attending_1))
-  unique_tempdf = unique_tempdf[unique_tempdf$time_in_days >= 0, ,drop = F]
-  #unique_tempdf$cause_of_death_clean = substr(unique_tempdf$cause_of_death, 1, 3)
-  #unique_tempdf$p_cause_of_death = icd_mapping$cancer_type[match(unique_tempdf$cause_of_death_clean, icd_mapping$ICD10)]
-  #unique_tempdf$p_cause_of_death[is.na(unique_tempdf$p_cause_of_death)]="Not cancer"
-  unique_tempdf$cancer_type[is.na(unique_tempdf$cancer_type)] = "No cancer"
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - attending_1,
+      death == T & is.na(diag_date) ~ date_of_death - attending_1,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - attending_1,
+    )) %>% 
+    filter(time_in_days >= 0)
   unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
   res.cox = coxph(Surv(time_in_days, event_indicator) ~ s.color, data = unique_tempdf)
   figure = ggsurvplot(survfit(res.cox), data = unique_tempdf)
@@ -289,6 +284,160 @@ cox_model_issue3_skin = sapply(X = unique(icd_mapping$cancer_type), FUN = functi
 
 save(file ="C:/Users/bagil/Desktop/ukb/objects/coxmodel_issue3_skin", cox_model_issue3_skin)
 ```
+
+#PTV cox group 1
+```{r}
+
+coxregfun_a_g1 = function(x) {
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - attending_1,
+      death == T & is.na(diag_date) ~ date_of_death - attending_1,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - attending_1,
+    )) %>% 
+    filter(time_in_days >= 0)
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden_group, data = unique_tempdf)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value,
+    group = c("group1")
+  )
+}
+
+result_list = lapply(unique(icd_mapping$cancer_type), coxregfun_a_g1)
+
+
+cancer_PTV_g1_a_df = do.call(rbind, result_list)
+save(cancer_PTV_g1_a_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g1_attending")
+
+
+```
+
+#PTV cox grup 2
+```{r}
+coxregfun_a_g2 = function(x) {
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - attending_1,
+      death == T & is.na(diag_date) ~ date_of_death - attending_1,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - attending_1,
+    )) %>% 
+    filter(time_in_days >= 0)
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden_group_2, data = unique_tempdf)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value,
+    group = c("group2")
+  )
+}
+
+result_list_2 = lapply(unique(icd_mapping$cancer_type), coxregfun_a_g2)
+
+
+cancer_PTV_g2_a_df = do.call(rbind, result_list_2)
+save(cancer_PTV_g2_a_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g2_attending")
+
+
+```
+
+#PTV cox group 3
+```{r}
+
+coxregfun_a_g3 = function(x) {
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - attending_1,
+      death == T & is.na(diag_date) ~ date_of_death - attending_1,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - attending_1,
+    )) %>% 
+    filter(time_in_days >= 0)
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden_group_3, data = unique_tempdf)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value,
+    group = c("group3")
+  )
+}
+
+result_list_3 = lapply(unique(icd_mapping$cancer_type), coxregfun_a_g3)
+
+
+cancer_PTV_g3_a_df = do.call(rbind, result_list_3)
+save(cancer_PTV_g3_a_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g3_attending")
+
+
+```
+
+#PTV cox
+```{r}
+
+coxregfun_a = function(x) {
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - attending_1,
+      death == T & is.na(diag_date) ~ date_of_death - attending_1,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - attending_1,
+    )) %>% 
+    filter(time_in_days >= 0)
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  res.cox = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden, data = unique_tempdf)
+  c(exp(res.cox$coefficients), summary(res.cox)$coefficients[5])
+  p_value = summary(res.cox)$coefficients[5]
+  coef_value = summary(res.cox)$coefficients[1]
+  data.frame(
+    cancer_type = x,
+    p_value = p_value,
+    coef_value = coef_value)
+}
+
+result_list_a = lapply(unique(icd_mapping$cancer_type), coxregfun_a)
+
+
+cancer_PTV_a_df = do.call(rbind, result_list_a)
+save(cancer_PTV_a_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_attending")
+
+
+```
+
 
 #PTV gruop 1 survival
 ```{r}

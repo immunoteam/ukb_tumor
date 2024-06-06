@@ -61,13 +61,17 @@ ages_df_complete$n.people = l - ages_df_complete$cumulative_cases
 
 age_datas = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
-  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
-  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(age = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
   unique_tempdf$age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
   unique_tempdf %>%
     filter(cancer_type == x) %>%
@@ -449,15 +453,20 @@ ages_df_Burden_complete_2 = do.call(rbind, ages_df_burden_temp)
 #Table
 age_datas_burden = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){ 
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
-  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
-  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(age = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
   unique_tempdf$diag_age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
   unique_tempdf$PTV_burden_group[is.na(unique_tempdf$PTV_burden_group)] = "No data"
+  unique_tempdf$PTV_burden_group = factor(unique_tempdf$PTV_burden_group, ordered = T)
   unique_tempdf %>%
     filter(cancer_type == x) %>%
     group_by(PTV_burden_group, diag_age_in_years) %>%
@@ -481,7 +490,7 @@ rm(age_table_burden, age_datas_burden, ages_df_Burden_complete_2, ages_df_burden
 #PTV burden plots group 1
 ```{r}
 
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden")
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden")
 age_burden_list = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   ggplot(age_table_burden_final[age_table_burden_final$cancer_type == x, ]) + 
     geom_point(mapping = aes(x = diag_age_in_years, y = age_associated_incidence, color = factor(PTV_burden_group))) +
@@ -491,7 +500,7 @@ age_burden_list = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
 })
 
 ggarrange(plotlist = age_burden_list, ncol = 5, nrow = 5, common.legend = T)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/age_incidence_gburden_g1.jpg",  width = 80, height = 40, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/age_incidence_gburden_g1.png",  width = 80, height = 40, units = "cm", dpi = 300)
 
 
 
@@ -534,15 +543,20 @@ ages_df_Burden_complete_2 = do.call(rbind, ages_df_burden_temp)
 #Table
 age_datas_burden = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){ 
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
-  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
-  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(age = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
   unique_tempdf$diag_age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
   unique_tempdf$PTV_burden_group_2[is.na(unique_tempdf$PTV_burden_group_2)] = "No data"
+  unique_tempdf$PTV_burden_group_2 = factor(unique_tempdf$PTV_burden_group_2, ordered = T)
   unique_tempdf %>%
     filter(cancer_type == x) %>%
     group_by(PTV_burden_group_2, diag_age_in_years) %>%
@@ -567,7 +581,7 @@ save(age_table_burden_final_2 ,file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/ob
 
 #PTV burden plots group 2
 ```{r}
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden_g2")
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden_g2")
 
 age_burden_list_2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   ggplot(age_table_burden_final_2[age_table_burden_final_2$cancer_type == x, ]) + 
@@ -578,7 +592,7 @@ age_burden_list_2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x
 })
 
 ggarrange(plotlist = age_burden_list_2, ncol = 5, nrow = 5, common.legend = T)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/age_incidence_gburden_g2.jpg",  width = 80, height = 40, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/age_incidence_gburden_g2.png",  width = 80, height = 40, units = "cm", dpi = 300)
 
 
 ```
@@ -620,15 +634,20 @@ ages_df_Burden_complete_2 = do.call(rbind, ages_df_burden_temp)
 #Table
 age_datas_burden = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){ 
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
-  tempdf_x = arrange(tempdf_x, diag_date)
-  tempdf_x$age = as.numeric(tempdf_x$diag_date - tempdf_x$birthdate)
-  tempdf_no_x = subset(ukb_data_cancer, !(eid %in% tempdf_x$eid))
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
-  tempdf_no_x$age = ifelse(tempdf_no_x$death == T, tempdf_no_x$date_of_death - tempdf_no_x$birthdate, max(tempdf_no_x$date_of_death, na.rm = T) - tempdf_no_x$birthdate)
   tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
   unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(age = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
   unique_tempdf$diag_age_in_years = floor(as.numeric(unique_tempdf$age)/365.25)
   unique_tempdf$PTV_burden_group_3[is.na(unique_tempdf$PTV_burden_group_3)] = "No data"
+  unique_tempdf$PTV_burden_group_3 = factor(unique_tempdf$PTV_burden_group_3, ordered = T)
   unique_tempdf %>%
     filter(cancer_type == x) %>%
     group_by(PTV_burden_group_3, diag_age_in_years) %>%
@@ -645,7 +664,7 @@ age_table_burden_final_3 = age_table_burden %>%
 
 age_table_burden_final_3$age_associated_incidence = age_table_burden_final_3$number_of_cases/age_table_burden_final_3$n.people
 
-save(age_table_burden_final_3, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden_g3")
+#save(age_table_burden_final_3, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden_g3")
 rm(age_table_burden, age_datas_burden, ages_df_Burden_complete_2, ages_df_burden_temp, ages_df_burden_complete, temp_df, ages_df_burden)
 
 ```
@@ -653,7 +672,7 @@ rm(age_table_burden, age_datas_burden, ages_df_Burden_complete_2, ages_df_burden
 #PTV burden plots group 3
 ```{r}
 
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden_g3")
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/age_table_burden_g3")
 
 age_burden_list_3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   ggplot(age_table_burden_final_3[age_table_burden_final_3$cancer_type == x, ]) + 
@@ -664,7 +683,7 @@ age_burden_list_3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x
 })
 
 ggarrange(plotlist = age_burden_list_3, ncol = 5, nrow = 5, common.legend = T)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/age_incidence_gburden_g3.jpg",  width = 80, height = 40, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/age_incidence_gburden_g3.png",  width = 80, height = 40, units = "cm", dpi = 300)
 
 ```
 
