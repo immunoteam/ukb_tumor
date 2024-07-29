@@ -1,0 +1,251 @@
+---
+title: "The effect of PTV burden on the development of cancers"
+author: "Balazs Koncz"
+date: "2024-07-25"
+output: html_document
+---
+
+
+#Setup
+
+```{r}
+Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "h2o")
+#              , , "pbapply", "protr", , "future.apply", "networkD3", "ggpubr", "RColorBrewer", "Rfast", , "Biostrings", "ComplexHeatmap", "ggrepel")
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+```
+
+#Melanoma
+##Data collection
+
+```{r}
+load("objects/ukb_data_cancer_final")
+
+melanoma_IDs = ukb_data_cancer %>% filter(ICD10_codes == "C43") %>% pull(eid) %>% unique()
+ukb_data_melanoma = ukb_data_cancer %>% filter(eid %in% melanoma_IDs) %>% filter(ICD10_codes == "C43") %>% arrange(diag_date)
+ukb_data_melanoma = ukb_data_melanoma[fmatch(melanoma_IDs, ukb_data_melanoma$eid),]
+ukb_data_melanoma %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+ukb_data_melanoma %<>% mutate(melanoma = T, .after = eid)
+
+nonmelanoma_IDs = unique(setdiff(ukb_data_cancer$eid, melanoma_IDs))
+ukb_data_nonmelanoma = ukb_data_cancer %>% filter(eid %in% nonmelanoma_IDs) %>% arrange(diag_date)
+ukb_data_nonmelanoma = ukb_data_nonmelanoma[fmatch(nonmelanoma_IDs, ukb_data_nonmelanoma$eid),]
+ukb_data_nonmelanoma %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+ukb_data_nonmelanoma %<>% mutate(melanoma = F, .after = eid)
+
+ukb_data = rbind(ukb_data_melanoma, ukb_data_nonmelanoma)
+rm(ukb_data_cancer, ukb_data_melanoma, ukb_data_nonmelanoma, melanoma_IDs, nonmelanoma_IDs)
+
+
+```
+
+##The development of the disease
+
+```{r}
+h2o.init()
+
+set.seed(123)
+ukb_data$melanoma = as.factor(ukb_data$melanoma)
+train <- ukb_data %>% dplyr::sample_frac(0.7)
+test  <- dplyr::anti_join(ukb_data, train, by = 'eid')
+
+train = as.h2o(train)
+test = as.h2o(test)
+
+
+glm = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "melanoma", training_frame = train)
+glm@model
+
+glm2 = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_universal_1"), y = "melanoma", training_frame = train)
+glm2@model
+
+# Run AutoML for 20 base models
+aml <- h2o.automl(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "melanoma",
+                  training_frame = train,
+                  max_models = 20,
+                  seed = 1)
+
+# View the AutoML Leaderboard
+lb <- aml@leaderboard
+print(lb, n = nrow(lb))  # Print all rows instead of default (6 rows)
+
+```
+
+
+##Death
+
+```{r}
+load("objects/ukb_data_cancer_final")
+
+melanoma_IDs = ukb_data_cancer %>% filter(ICD10_codes == "C43") %>% pull(eid) %>% unique()
+ukb_data_melanoma = ukb_data_cancer %>% filter(eid %in% melanoma_IDs) %>% filter(ICD10_codes == "C43") %>% arrange(diag_date)
+ukb_data_melanoma = ukb_data_melanoma[fmatch(melanoma_IDs, ukb_data_melanoma$eid),]
+ukb_data_melanoma %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+
+h2o.init()
+
+set.seed(123)
+ukb_data_melanoma$death = as.factor(ukb_data_melanoma$death)
+train <- ukb_data_melanoma %>% dplyr::sample_frac(0.7)
+test  <- dplyr::anti_join(ukb_data_melanoma, train, by = 'eid')
+
+train = as.h2o(train)
+test = as.h2o(test)
+
+
+mel_glm = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "death", training_frame = train)
+glm@model
+
+mel_glm2 = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_universal_1"), y = "death", training_frame = train)
+glm2@model
+
+
+glm(death ~ age + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + PTV_universal_1, family = binomial(), data = ukb_data_melanoma)
+```
+
+##Melanoma is the primary cause of death
+
+```{r}
+load("objects/ukb_data_cancer_final")
+
+melanoma_IDs = ukb_data_cancer %>% filter(ICD10_codes == "C43") %>% pull(eid) %>% unique()
+ukb_data_melanoma = ukb_data_cancer %>% filter(eid %in% melanoma_IDs) %>% filter(ICD10_codes == "C43") %>% arrange(diag_date)
+ukb_data_melanoma = ukb_data_melanoma[fmatch(melanoma_IDs, ukb_data_melanoma$eid),]
+ukb_data_melanoma %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+
+View(table(ukb_data_melanoma$cause_of_death))
+ukb_data_melanoma %<>% mutate(deathcbMel = ifelse(substr(cause_of_death,1,3) != "C43" | is.na(cause_of_death), "no", "yes"))
+
+h2o.init()
+
+set.seed(123)
+ukb_data_melanoma$deathcbMel = as.factor(ukb_data_melanoma$deathcbMel)
+train <- ukb_data_melanoma %>% dplyr::sample_frac(0.7)
+test  <- dplyr::anti_join(ukb_data_melanoma, train, by = 'eid')
+
+train = as.h2o(train)
+test = as.h2o(test)
+
+
+mel_glm = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "deathcbMel", training_frame = train)
+mel_glm@model
+
+mel_glm2 = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_universal_1"), y = "deathcbMel", training_frame = train)
+mel_glm2@model
+
+
+```
+
+#Non-Hodgkin lymphoma
+
+##Data collection
+
+```{r}
+load("objects/ukb_data_cancer_final")
+
+nonhodgkin_IDs = ukb_data_cancer %>% filter(ICD10_codes == "C85") %>% pull(eid) %>% unique()
+ukb_data_nonhodgkin = ukb_data_cancer %>% filter(eid %in% nonhodgkin_IDs) %>% filter(ICD10_codes == "C85") %>% arrange(diag_date)
+ukb_data_nonhodgkin = ukb_data_nonhodgkin[fmatch(nonhodgkin_IDs, ukb_data_nonhodgkin$eid),]
+ukb_data_nonhodgkin %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+ukb_data_nonhodgkin %<>% mutate(nonhodgkin = T, .after = eid)
+
+nonnonhodgkin_IDs = unique(setdiff(ukb_data_cancer$eid, nonhodgkin_IDs))
+ukb_data_nonnonhodgkin = ukb_data_cancer %>% filter(eid %in% nonnonhodgkin_IDs) %>% arrange(diag_date)
+ukb_data_nonnonhodgkin = ukb_data_nonnonhodgkin[fmatch(nonnonhodgkin_IDs, ukb_data_nonnonhodgkin$eid),]
+ukb_data_nonnonhodgkin %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+ukb_data_nonnonhodgkin %<>% mutate(nonhodgkin = F, .after = eid)
+
+ukb_data = rbind(ukb_data_nonhodgkin, ukb_data_nonnonhodgkin)
+rm(ukb_data_cancer, ukb_data_nonhodgkin, ukb_data_nonnonhodgkin, nonhodgkin_IDs, nonnonhodgkin_IDs)
+
+
+```
+
+##The development of the disease
+
+```{r}
+
+set.seed(123)
+ukb_data$nonhodgkin = as.factor(ukb_data$nonhodgkin)
+train <- ukb_data %>% dplyr::sample_frac(0.7)
+test  <- dplyr::anti_join(ukb_data, train, by = 'eid')
+
+h2o.init()
+train = as.h2o(train)
+test = as.h2o(test)
+
+
+glm = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "nonhodgkin", training_frame = train)
+glm@model
+
+glm2 = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_universal_1"), y = "nonhodgkin", training_frame = train)
+glm2@model
+
+# Run AutoML for 20 base models
+aml <- h2o.automl(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_universal_1"), y = "nonhodgkin",
+                  training_frame = train,
+                  max_models = 20,
+                  seed = 1)
+
+# View the AutoML Leaderboard
+lb <- aml@leaderboard
+print(lb, n = nrow(lb))  # Print all rows instead of default (6 rows)
+
+```
+
+
+```{r}
+load("objects/ukb_data_cancer_final")
+icd10_codes = ukb_data_cancer %>% group_by(ICD10_codes) %>% summarise(n = n()) %>% arrange(desc(n)) %>% filter(!is.na(ICD10_codes)) %>% slice(1:10) %>% pull(ICD10_codes)
+lapply(icd10_codes, function(code) {
+  tumor_IDs = ukb_data_cancer %>% filter(ICD10_codes == code) %>% pull(eid) %>% unique()
+  tumor_df = ukb_data_cancer %>% filter(eid %in% tumor_IDs) %>% filter(ICD10_codes == code) %>% arrange(diag_date)
+  tumor_df = tumor_df[fmatch(tumor_IDs, tumor_df$eid),]
+  tumor_df %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+  tumor_df %<>% mutate(hastumor = T, .after = eid)
+  nontumor_IDs = unique(setdiff(ukb_data_cancer$eid, tumor_IDs))
+  nontumor_df = ukb_data_cancer %>% filter(eid %in% nontumor_IDs) %>% arrange(diag_date)
+  nontumor_df = nontumor_df[fmatch(nontumor_IDs, nontumor_df$eid),]
+  nontumor_df %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
+  nontumor_df %<>% mutate(hastumor = F, .after = eid)
+  ukb_data = rbind(tumor_df, nontumor_df)
+  ukb_data$hastumor = as.factor(ukb_data$hastumor)
+  
+  h2o.init()
+  
+  set.seed(123)
+  train = ukb_data %>% sample_frac(0.7)
+  test  = anti_join(ukb_data, train, by = 'eid')
+  train = as.h2o(train)
+  test = as.h2o(test)
+  
+  aml <- h2o.automl(x = c("age", "sex", paste0("gpca_", 1:10), "PTV_burden"), y = "hastumor",
+                  training_frame = train,
+                  max_models = 20,
+                  seed = 1)
+  lb <- aml@leaderboard
+  h2o.save_frame(x = lb, dir = paste0("D:/CloudStation/mygit/ukb_tumor/res/aml/aml_", code))
+  lb$model_id
+  pred <- h2o.predict(aml, test)
+  
+  m <- aml@leader
+  # this is equivalent to
+  m <- h2o.get_best_model(aml)
+
+  # Get the best model using a non-default metric
+  m <- h2o.get_best_model(aml, criterion = "logloss")
+  m@params$actual
+})
+
+
+
+
+
+
+
+
+```
+
+
+

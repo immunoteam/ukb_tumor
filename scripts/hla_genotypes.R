@@ -1,11 +1,15 @@
 library(data.table)
 library(Rfast)
 library(fastmatch)
-data = fread("objects/ukbiobank_HLA.txt", sep = "\t")
-cn = readLines("objects/hla_imp_header_alleles.txt")
+#data = fread("objects/ukbiobank_HLA.txt", sep = "\t")
+data = fread("objects/22182.txt", sep = "\t")
+#cn = readLines("objects/hla_imp_header_alleles.txt")
+cn = readLines("objects/hla_data_header.txt")
 cn = unlist(strsplit(cn, "\t"))
 cn = unname(sapply(cn, function(x) {ifelse(nchar(x) %in% c(5,8), gsub("_", "_0", x), x)}))
-length(unlist(strsplit(data$eid[1], ",")))
+length(unlist(strsplit(data$value[3], ",")))
+Table(sapply(data$value, function(x) length(unlist(strsplit(x, ",")))))
+
 genotypes_list = lapply(data$eid, function(x) {unlist(strsplit(x, ","))})
 Table(lengths(genotypes_list))
 
@@ -22,9 +26,9 @@ genotypes_hla = lapply(genotypes_list, function(x) {
   }
 })
 Table(lengths(genotypes_hla))
-save(genotypes_hla, file = "D:/CloudStation/ukbiobank_tumor/genotypes_hla")
+save(genotypes_hla, file = "objects/genotypes_hla")
 
-genotypes_eid = data$eid
+genotypes_eid = data$V1
 saveRDS(genotypes_eid, file = "objects/genotypes_eid")
 
 ###
