@@ -92,6 +92,7 @@ age_tables$age_associated_incidence = age_tables$number_of_cases/age_tables$n.pe
 
 
 ```
+
 #Age plots number 1
 ```{r}
 ggplot(age_tables[age_tables$cancer_type == "Thyroid",], mapping = aes(x = age_in_years, y = age_associated_incidence)) +
@@ -108,11 +109,11 @@ ggplot(age_tables[age_tables$cancer_type == "Melanoma",], mapping = aes(x = age_
 ```{r}
 
 ages_df_sex = ukb_data_cancer %>%
-  distinct(eid, age, sex) %>%
-  group_by(age, sex) %>%
+  distinct(eid, age, sex, PTV_universal_1) %>%
+  group_by(age, sex, PTV_universal_1) %>%
   summarize(Number_of_People = n()) %>%
   arrange(age) %>%
-  group_by(sex) %>% 
+  group_by(sex, PTV_universal_1) %>% 
   mutate(
     cumulative_cases = cumsum(Number_of_People)
   )
@@ -174,6 +175,89 @@ rm(age_table_sex, age_datas_skin, ages_df_sex_complete_2, ages_df_sex_temp, ages
 
 
 ```
+
+#PTV universal 1
+```{r}
+
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+age_df_incidence = lapply(X = tumors, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_time = round(as.numeric((diag_date - birthdate))/365.25))
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_time = case_when(
+    death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  minage = min(c(tempdf_x$inc_time, tempdf_no_x$inc_time))
+  maxage = max(c(tempdf_x$inc_time, tempdf_no_x$inc_time))
+  freq_tbl_x = tempdf_x %>% 
+    group_by(inc_time, sex, PTV_universal_1) %>% 
+    summarise(case_num = n()) 
+  res = expand.grid(inc_time = seq(minage, maxage, 1), sex = unique(freq_tbl_x$sex), PTV_universal_1 = unique(freq_tbl_x$PTV_universal_1), stringsAsFactors = F) 
+  res %<>% left_join(freq_tbl_x)
+  res$case_num[is.na(res$case_num)] = 0
+  res_l_0 = apply(X = unique(res[, c("sex", "PTV_universal_1")]), MARGIN = 1, FUN = function(y){
+    res %>% filter(sex == y[1], PTV_universal_1 == y[2])
+  })
+  res_l_0 = lapply(X = res_l_0, FUN = function(k){
+    k %<>%
+      mutate(
+        cumulative_cases = cumsum(case_num)
+      )
+    for(i in 2:nrow(k)){
+      if(is.na(k$cumulative_cases[i]) & !is.na(k$cumulative_cases[i - 1])){
+        k$cumulative_cases[i] = k$cumulative_cases[i - 1]
+      }
+    }
+   
+    k
+  })
+  res = bind_rows(res_l_0)
+  freq_tbl_no_x = tempdf_no_x %>%
+    group_by(age, sex, PTV_universal_1) %>%
+    summarize(no_case_death_num = n()) %>%
+    arrange(age) %>%
+    group_by(sex, PTV_universal_1) %>% 
+    mutate(
+      cumulative_no_cases = cumsum(no_case_death_num)
+    )
+  res %<>% left_join(freq_tbl_no_x, by = c("inc_time" = "age", "sex", "PTV_universal_1")) 
+  res$no_case_death_num[is.na(res$no_case_death_num)] = 0
+  res_l = apply(X = unique(res[, c("sex", "PTV_universal_1")]), MARGIN = 1, FUN = function(y){
+    res %>% filter(sex == y[1], PTV_universal_1 == y[2])
+  })
+  res_l = lapply(X = res_l, FUN = function(l){
+    for(i in 2:nrow(l)){
+      if(is.na(l$cumulative_no_cases[i]) & !is.na(l$cumulative_no_cases[i - 1])){
+        l$cumulative_no_cases[i] = l$cumulative_no_cases[i - 1]
+      }
+    } 
+    l
+  })
+  res = bind_rows(res_l)
+  res$cumulative_no_cases[is.na(res$cumulative_no_cases)] = 0
+  p = tempdf_no_x %>% 
+    group_by(sex, PTV_universal_1) %>% 
+    summarise(no_case_pop_num = n())
+  res %<>% left_join(p)
+  res %<>% mutate(no_case_alive = no_case_pop_num - cumulative_no_cases) 
+  res %<>% mutate(pop_num = cumulative_cases + no_case_alive)
+  res$PTV_universal_1 = factor(res$PTV_universal_1, levels = levels(tempdf_x$PTV_universal_1))
+})
+u = ukb_data_cancer %>%
+  distinct(eid, sex, PTV_universal_1) %>% 
+  group_by(sex, PTV_universal_1) %>% 
+  summarise(n = n())
+
+```
+
+
 
 #Age-sex plots
 ```{r}

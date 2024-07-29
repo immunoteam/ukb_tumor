@@ -21,13 +21,13 @@ library(tidyverse)
 library(future.apply)
 library(magrittr)
 library(gridExtra)
-options(dplyr.summarise.inform = F)
+oíptions(dplyr.summarise.inform = F)
 ```
 
 #Files
 ```{r}
-load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_cancer_final")
-load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
 
 ```
 
@@ -79,13 +79,11 @@ ggsave(filename = "C:/Users/bagil/Desktop/ukb/plots/Survival/cancer_issue2_table
 
 ```
 
-#PTV burden group 3
+#PTV burden group 5%
 ```{r}
 
-
-
 #Surv plot
-plotlist_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+plotlist_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = dplyr::arrange(tempdf_x, diag_date)
   tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
@@ -99,17 +97,17 @@ plotlist_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
       death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
     ))
   unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
-  unique_tempdf$PTV_burden_grou_3 = factor(unique_tempdf$PTV_burden_group_3, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_3, data = unique_tempdf))
+  unique_tempdf$PTV_burden_group_5per = factor(unique_tempdf$PTV_burden_group_5per, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_5per, data = unique_tempdf))
   args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
   pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_3, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_5per, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
+ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
 
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/PTV_burden_g3_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/new_PTV_burden_5per_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 #+ annotate(geom = "text", x = 1000, y = 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05 , color = "black", label = pvalueA, size = 5)
@@ -122,7 +120,7 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incide
 
 ```
 
-#PTV burden group 2
+#PTV burden group 10%
 ```{r}
 
 plotlist_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
@@ -139,23 +137,23 @@ plotlist_PTV2 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
       death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
     ))
   unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
-  unique_tempdf$PTV_burden_grou_2 = factor(unique_tempdf$PTV_burden_group_2, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_2, data = unique_tempdf))
+  unique_tempdf$PTV_burden_group_10per = factor(unique_tempdf$PTV_burden_group_10per, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_10per, data = unique_tempdf))
   args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
   pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_2, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_10per, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
 ggarrange(plotlist =  plotlist_PTV2, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/PTV_burden_g2_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/new_PTV_burden_10per_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```
 
-#PTV burden group 1
+#PTV burden group 15%
 ```{r}
-plotlist_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+plotlist_PTV3 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
   tempdf_x = dplyr::arrange(tempdf_x, diag_date)
   tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
@@ -169,19 +167,51 @@ plotlist_PTV1 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
       death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
     ))
   unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
-  unique_tempdf$PTV_burden_grou = factor(unique_tempdf$PTV_burden_group, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group, data = unique_tempdf))
+  unique_tempdf$PTV_burden_group_15per = factor(unique_tempdf$PTV_burden_group_15per, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_15per, data = unique_tempdf))
   args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
   pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_15per, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/PTV_burden_g1_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/new_PTV_burden_15per_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
 
 
 ```
+
+#PTV burden group 20%
+```{r}
+plotlist_PTV4 = lapply(X = unique(icd_mapping$cancer_type), FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  unique_tempdf$PTV_burden_group_20per = factor(unique_tempdf$PTV_burden_group_20per, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_20per, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_burden_group_20per, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV4, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/new_PTV_burden_20per_surv.png", width = 100, height = 50, units = "cm", dpi = 300)
+
+
+```
+
+
 
 #Cancer incidence
 ```{r}
@@ -381,8 +411,8 @@ coxregfun = function(x) {
 result_list = lapply(unique(icd_mapping$cancer_type), coxregfun)
 
 
-cancer_PTV_g1_df = do.call(rbind, result_list)
-save(cancer_PTV_g1_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g1")
+cancer_new_PTV_g1_df = do.call(rbind, result_list)
+save(cancer_new_PTV_g1_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_new_PTV_coef_g1")
 
 
 ```
@@ -419,8 +449,8 @@ coxregfun2 = function(x) {
 result_list_2 = lapply(unique(icd_mapping$cancer_type), coxregfun2)
 
 
-cancer_PTV_g2_df = do.call(rbind, result_list_2)
-save(cancer_PTV_g2_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g2")
+cancer_new_PTV_g2_df = do.call(rbind, result_list_2)
+save(cancer_new_PTV_g2_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_new_PTV_coef_g2")
 
 ```
 
@@ -456,8 +486,8 @@ coxregfun3 = function(x) {
 result_list_3 = lapply(unique(icd_mapping$cancer_type), coxregfun3)
 
 
-cancer_PTV_g3_df = do.call(rbind, result_list_3)
-save(cancer_PTV_g3_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_coef_g3")
+cancer_new_PTV_g3_df = do.call(rbind, result_list_3)
+save(cancer_new_PTV_g3_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_new_PTV_coef_g3")
 
 ```
 
@@ -491,8 +521,8 @@ coxregfun = function(x) {
 result_list = lapply(unique(icd_mapping$cancer_type), coxregfun)
 
 
-cancer_PTV_cox = do.call(rbind, result_list)
-save(cancer_PTV_cox,file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_cox")
+cancer_new_PTV_cox = do.call(rbind, result_list)
+save(cancer_new_PTV_cox,file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_new_PTV_cox")
 rm(result_list, coxregfun, tempdf_no_x, tempdf_x, unique_tempdf, res.cox, cancer_PTV_cox, coef_value, p_value)
 
 
@@ -536,17 +566,19 @@ result_list = lapply(unique(icd_mapping$cancer_type), coxregfun)
 cancer_types <- unique(icd_mapping$cancer_type)
 names(result_list) <- cancer_types
 
-cancer_PTV_cox = do.call(rbind, result_list)
-save(cancer_PTV_cox,file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_PTV_cox_sex_ethnic")
+cancer_new_PTV_cox = do.call(rbind, result_list)
+save(cancer_new_PTV_cox,file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_new_PTV_cox_sex_ethnic")
 
 
 ```
 
-#Hazard ratio 
+#Forest plot
 ```{r}
 
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
 i = 0
-PTV_tumor_forest_plot = lapply(X = unique(ukb_data_cancer$cancer_type), FUN = function(x){
+PTV_tumor_forest_plot = lapply(X = tumors, FUN = function(x){
   i = i + 1
   .GlobalEnv$i = i
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
@@ -584,11 +616,537 @@ PTV_tumor_forest_plot = lapply(X = unique(ukb_data_cancer$cancer_type), FUN = fu
     unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
     hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
   }
-  ggforest(hr_model, data = unique_tempdf)  
+  ggforest(hr_model, data = unique_tempdf, main = paste0("Hazard ratio of ", x))
 })
 
 PTV_cox_forest = ggarrange(plotlist = PTV_tumor_forest_plot, ncol = 9, nrow = 3)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/ptv_forest.jpg", plot = PTV_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/cancer_type_ptv_forest.png", plot = PTV_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
+
+```
+
+
+```{r}
+
+ukb_data_cancer$has_tumor = T
+ukb_data_cancer$has_tumor[ukb_data_cancer$cancer_type == "No_cancer"] = F
+
+tempdf_x = subset(ukb_data_cancer, cancer_type != "No_cancer")
+tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+tempdf_x$has_tumor = T
+tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+tempdf_no_x$has_tumor = F
+unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+unique_tempdf %<>% 
+  mutate(time_in_days = case_when(
+    has_tumor == T ~ diag_date - birthdate,
+    death == T & is.na(diag_date) ~ date_of_death - birthdate,
+    death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+  ))
+unique_tempdf$event_indicator = ifelse(unique_tempdf$has_tumor == T, 1, 0)
+unique_tempdf$sex = factor(unique_tempdf$sex)
+l = tempdf_x %>% 
+  add_count(ethnic_group, name = "freq") %>% 
+  filter(freq > nrow(tempdf_x)/50) %>% 
+  arrange(desc(freq)) %>% 
+  pull(ethnic_group) %>% 
+  unique()
+
+unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+ggforest(hr_model, data = unique_tempdf, main = "Hazard ratio of cancer")
+hr_model
+
+
+
+```
+
+
+#Forest plot for tumor categories
+```{r}
+
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(ukb_data_cancer$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+i = 0
+PTV_tumor_forest_plot = lapply(X = hist_cat, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  tempdf_x = subset(ukb_data_cancer, hist_tumor_cat == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  #icd_code = icd_mapping$ICD10[icd_mapping$hist_tumor_cat == x]
+  #tempdf_x_dead = tempdf_x %>% filter(death == T, cause_of_death == icd_code)
+  #tempdf_x_alive = tempdf_x %>% filter(death == F)
+  #tempdf_x = rbind(tempdf_x_alive, tempdf_x_dead)
+  tempdf_no_x = subset(ukb_data_cancer, hist_tumor_cat == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      hist_tumor_cat == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$hist_tumor_cat == x, 1, 0)
+  unique_tempdf$sex = factor(unique_tempdf$sex)
+  l = tempdf_x %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(tempdf_x)/50) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  if (length(l) == 1 & length(unique(tempdf_x$sex)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+  } else if(length(l) == 1 & length(unique(tempdf_x$sex)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+  } else if(length(l) > 1 & length(unique(tempdf_x$sex)) == 1){
+    unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+  } else {
+    unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+  }
+  ggforest(hr_model, data = as.data.frame(unique_tempdf), main = paste0("Hazard ratio of ", x))
+})
+
+PTV_cox_forest = ggarrange(plotlist = PTV_tumor_forest_plot, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/hist_tumor_cat_forest.png", plot = PTV_cox_forest, width = 120, height = 40, units = "cm", limitsize = F, dpi = 300)
+
+
+
+
+```
+
+#Surv analysis 
+##Tumor cat by hist universal 1
+```{r}
+
+ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(ukb_data_cancer$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = hist_cat, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, hist_tumor_cat == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, hist_tumor_cat == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      hist_tumor_cat == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$hist_tumor_cat == x, 1, 0)
+  #unique_tempdf$PTV_universal_1 = factor(unique_tempdf$PTV_universal_1, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/tumor_cat_PTV_universal_1.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Tumor cat by hist universal 2
+```{r}
+ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(ukb_data_cancer$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = hist_cat, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, hist_tumor_cat == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, hist_tumor_cat == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      hist_tumor_cat == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$hist_tumor_cat == x, 1, 0)
+  #unique_tempdf$PTV_universal_2 = factor(unique_tempdf$PTV_universal_2, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/tumor_cat_PTV_universal_2.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+
+```
+
+##Tumor cat by hist cancer
+```{r}
+
+ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(ukb_data_cancer$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = hist_cat, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, hist_tumor_cat == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, hist_tumor_cat == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      hist_tumor_cat == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$hist_tumor_cat == x, 1, 0)
+  #unique_tempdf$PTV_cancer = factor(unique_tempdf$PTV_cancer, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_cancer, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/tumor_cat_PTV_cancer.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Hist cat 1
+```{r}
+
+ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(ukb_data_cancer$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = hist_cat, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, hist_tumor_cat == x)
+  tempdf_x$PTV_hist_type_1 = as.character(tempdf_x$PTV_hist_type_1)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  l = sort(unique(tempdf_x$PTV_hist_type_1))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(ukb_data_cancer, hist_tumor_cat == "No_cancer")
+  tempdf_no_x$PTV_hist_type_1 = as.character(tempdf_no_x$PTV_hist_type_1)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$PTV_hist_type_1 = cut(tempdf_no_x$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_hist_type_1 = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      hist_tumor_cat == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$hist_tumor_cat == x, 1, 0)
+  #unique_tempdf$PTV_hist_type_1 = factor(unique_tempdf$PTV_hist_type_1, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/tumor_cat_PTV_tumor_cat_1.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Hist cat 2
+```{r}
+
+ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(ukb_data_cancer$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = hist_cat, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, hist_tumor_cat == x)
+  tempdf_x$PTV_hist_type_2 = as.character(tempdf_x$PTV_hist_type_2)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  l = sort(unique(tempdf_x$PTV_hist_type_2))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(ukb_data_cancer, hist_tumor_cat == "No_cancer")
+  tempdf_no_x$PTV_hist_type_2 = as.character(tempdf_no_x$PTV_hist_type_2)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$PTV_hist_type_2 = cut(tempdf_no_x$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_hist_type_2 = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      hist_tumor_cat == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$hist_tumor_cat == x, 1, 0)
+  #unique_tempdf$PTV_hist_type_2 = factor(unique_tempdf$PTV_hist_type_2, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/tumor_cat_PTV_tumor_cat_2.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Hist cat 3
+```{r}
+
+ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(ukb_data_cancer$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = hist_cat, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, hist_tumor_cat == x)
+  tempdf_x$PTV_hist_type_3 = as.character(tempdf_x$PTV_hist_type_3)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  l = sort(unique(tempdf_x$PTV_hist_type_3))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(ukb_data_cancer, hist_tumor_cat == "No_cancer")
+  tempdf_no_x$PTV_hist_type_3 = as.character(tempdf_no_x$PTV_hist_type_3)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$PTV_hist_type_3 = cut(tempdf_no_x$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_hist_type_3 = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      hist_tumor_cat == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$hist_tumor_cat == x, 1, 0)
+  #unique_tempdf$PTV_hist_type_3 = factor(unique_tempdf$PTV_hist_type_3, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/tumor_cat_PTV_tumor_cat_3.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+
+##Cancer type universal 1
+```{r}
+
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = tumors, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  #unique_tempdf$PTV_universal_1 = factor(unique_tempdf$PTV_universal_1, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/cancer_type_PTV_universal_1.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Cancer type universal 2
+```{r}
+
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = tumors, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  #unique_tempdf$PTV_universal_2 = factor(unique_tempdf$PTV_universal_2, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/cancer_type_PTV_universal_2.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+
+##Cancer type cancer spec 1
+```{r}
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = tumors, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x$PTV_cancer_type_1 = as.character(tempdf_x$PTV_cancer_type_1)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  l = sort(unique(tempdf_x$PTV_cancer_type_1))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x$PTV_cancer_type_1 = as.character(tempdf_no_x$PTV_cancer_type_1)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$PTV_cancer_type_1 = cut(tempdf_no_x$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_cancer_type_1 = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  #unique_tempdf$PTV_cancer_type_1 = factor(unique_tempdf$PTV_cancer_type_1, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/cancer_type_PTV_cancer_type_1.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Cancer type cancer spec 2
+```{r}
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = tumors, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x$PTV_cancer_type_2 = as.character(tempdf_x$PTV_cancer_type_2)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  l = sort(unique(tempdf_x$PTV_cancer_type_2))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x$PTV_cancer_type_2 = as.character(tempdf_no_x$PTV_cancer_type_2)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$PTV_cancer_type_2 = cut(tempdf_no_x$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_cancer_type_2 = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  #unique_tempdf$PTV_cancer_type_2 = factor(unique_tempdf$PTV_cancer_type_2, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/cancer_type_PTV_cancer_type_2.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+
+```
+
+##Cancer type 3
+```{r}
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+plotlist_PTV3 = lapply(X = tumors, FUN = function(x){
+  tempdf_x = subset(ukb_data_cancer, cancer_type == x)
+  tempdf_x$PTV_cancer_type_3 = as.character(tempdf_x$PTV_cancer_type_3)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  l = sort(unique(tempdf_x$PTV_cancer_type_3))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(ukb_data_cancer, cancer_type == "No_cancer")
+  tempdf_no_x$PTV_cancer_type_3 = as.character(tempdf_no_x$PTV_cancer_type_3)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x$PTV_cancer_type_3 = cut(tempdf_no_x$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_cancer_type_3 = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf %<>% 
+    mutate(time_in_days = case_when(
+      cancer_type == x ~ diag_date - birthdate,
+      death == T & is.na(diag_date) ~ date_of_death - birthdate,
+      death == F & is.na(diag_date) ~ max(date_of_death, na.rm = T) - birthdate,
+    ))
+  unique_tempdf$event_indicator = ifelse(unique_tempdf$cancer_type == x, 1, 0)
+  #unique_tempdf$PTV_cancer_type_3 = factor(unique_tempdf$PTV_cancer_type_3, ordered = T)
+  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = unique_tempdf))
+  args = list(fit = fit, title = paste0("Incidence Analysis for ", x, "\n(N=", nrow(tempdf_x), ")"), ylim = c(1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05, 1), pval = T, pval.coord = c(1, 1 - (nrow(tempdf_x) / nrow(unique_tempdf)) - (nrow(tempdf_x) / nrow(unique_tempdf)) * 0.05),legend = "none")
+  pfit = do.call(ggsurvplot, args)
+  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = unique_tempdf), risk.table = T, tables.theme = clean_theme())$table
+  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+ggarrange(plotlist =  plotlist_PTV3, ncol = 5, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_birth/cancer_type_PTV_cancer_type_3.png", width = 170, height = 70, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+
+#Tumor categoris
+```{r}
+
+ukb_data_cancer$tumor_cat = as.factor(ukb_data_cancer$tumor_cat)
+ukb_data_cancer$tumor_cat = fct_reorder(ukb_data_cancer$tumor_cat, ukb_data_cancer$PTV_burden, .fun = function(x){quantile(x, 0.25)})
+
+PTV_tumor_box = ggplot(ukb_data_cancer, aes(x = tumor_cat, y = PTV_burden, color = tumor_cat)) +
+  geom_violin() +
+  geom_boxplot(notch = T, width = 0.3) + 
+  labs(title = "Number of PTV burden in tumors", x = "Tumor categorie", y = "PTV") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(PTV_tumor_box)
+
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/tumor_cat_PTV_box.jpg", plot = PTV_tumor_box, width = 60, height = 30, units = "cm", dpi = 300)
+
 
 ```
 
@@ -607,7 +1165,7 @@ PTV_tumor_box = ggplot(ukb_data_cancer, aes(x = cancer_type, y = PTV_burden, col
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 print(PTV_tumor_box)
 
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/PTV_tumor_box.jpg", plot = PTV_tumor_box, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/new_PTV_tumor_box.jpg", plot = PTV_tumor_box, width = 60, height = 30, units = "cm", dpi = 300)
 
 ```
 
@@ -620,7 +1178,7 @@ PTV_tumor_point = ggplot(ukb_data_cancer, aes(x = cancer_type, y = PTV_burden, c
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 print(PTV_tumor_box)
 
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/PTV_tumor_point.jpg", plot = PTV_tumor_point, width = 60, height = 30, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/new_PTV_tumor_point.jpg", plot = PTV_tumor_point, width = 60, height = 30, units = "cm", dpi = 300)
 
 ```
 
@@ -645,6 +1203,93 @@ PTV_tumor_his_median = lapply(X = unique(ukb_data_cancer$cancer_type), FUN = fun
 
 PTV_tumor_his_median = ggarrange(plotlist = PTV_tumor_his_median, ncol = 5, nrow = 6)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/PTV_tumor_hist_median.png", plot = PTV_tumor_his_median, width = 60, height = 30, units = "cm", dpi = 300)
+
+```
+
+#New PTV hist
+```{r}
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+
+m = ukb_data_cancer %>% 
+  filter(cancer_type == "No_cancer") %>% 
+  pull(PTV_burden) %>% 
+  median()
+
+PTV_tumor_his_median = lapply(X = unique(ukb_data_cancer$cancer_type), FUN = function(x){
+  temp_df = ukb_data_cancer %>% filter(cancer_type == x)
+  ggplot(temp_df, aes(x = PTV_burden)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "skyblue", alpha = 0.6) + 
+    labs(title = paste0("Number of PTV burden in ", x), x = "PTV", y = "Count") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    geom_vline(xintercept = m, linetype = "dashed") +
+    geom_vline(xintercept = median(temp_df$PTV_burden), color = "red")
+})
+
+PTV_tumor_his_median = ggarrange(plotlist = PTV_tumor_his_median, ncol = 5, nrow = 6)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/update_PTV_tumor_hist_median.png", plot = PTV_tumor_his_median, width = 60, height = 30, units = "cm", dpi = 300)
+
+```
+
+#Tumor categiries hist
+```{r}
+
+m = ukb_data_cancer %>% 
+  filter(tumor_cat == "No_cancer") %>% 
+  pull(PTV_burden) %>% 
+  median()
+
+PTV_tumor_his_median = lapply(X = unique(ukb_data_cancer$tumor_cat), FUN = function(x){
+  temp_df = ukb_data_cancer %>% filter(tumor_cat == x)
+  ggplot(temp_df, aes(x = PTV_burden)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "skyblue", alpha = 0.6) + 
+    labs(title = paste0("Number of PTV burden in ", x), x = "PTV", y = "Count") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    geom_vline(xintercept = m, linetype = "dashed") +
+    geom_vline(xintercept = median(temp_df$PTV_burden), color = "red")
+})
+
+PTV_tumor_his_median = ggarrange(plotlist = PTV_tumor_his_median, ncol = 4, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/tumor_cat_hist_median.png", plot = PTV_tumor_his_median, width = 80, height = 40, units = "cm", dpi = 300)
+
+```
+
+#Tumor categories by histology
+```{r}
+#Files
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+m = ukb_data_cancer %>% 
+  filter(hist_tumor_cat == "No_cancer") %>% 
+  pull(PTV_burden) %>% 
+  median()
+
+PTV_tumor_his_median = lapply(X = unique(ukb_data_cancer$hist_tumor_cat), FUN = function(x){
+  temp_df = ukb_data_cancer %>% filter(hist_tumor_cat == x)
+  ggplot(temp_df, aes(x = PTV_burden)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "skyblue", alpha = 0.6) + 
+    labs(title = paste0("Number of PTV burden in ", x), x = "PTV", y = "Count") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    geom_vline(xintercept = m, linetype = "dashed") +
+    geom_vline(xintercept = median(temp_df$PTV_burden), color = "red")
+})
+
+PTV_tumor_his_median = ggarrange(plotlist = PTV_tumor_his_median, ncol = 4, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/histology_tumor_cat_hist_median.png", plot = PTV_tumor_his_median, width = 80, height = 40, units = "cm", dpi = 300)
+
+```
+
+#Tumor cat by hist boxplot
+```{r}
+
+PTV_tumor_box = ggplot(ukb_data_cancer, aes(x = hist_tumor_cat, y = PTV_burden, color = hist_tumor_cat)) +
+  geom_violin() +
+  geom_boxplot(notch = T, width = 0.3) + 
+  labs(title = "Number of PTV burden in tumors", x = "Tumor categories", y = "PTV") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(PTV_tumor_box)
+
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/new_PTV_tumor_box_cat_by_histology.jpg", plot = PTV_tumor_box, width = 60, height = 30, units = "cm", dpi = 300)
+
 
 ```
 
