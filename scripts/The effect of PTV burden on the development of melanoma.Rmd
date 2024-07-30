@@ -22,21 +22,18 @@ options(dplyr.summarise.inform = FALSE)
 ```{r}
 load("objects/ukb_data_cancer_final")
 
-melanoma_IDs = ukb_data_cancer %>% filter(ICD10_codes == "C43") %>% pull(eid) %>% unique()
-ukb_data_melanoma = ukb_data_cancer %>% filter(eid %in% melanoma_IDs) %>% filter(ICD10_codes == "C43") %>% arrange(diag_date)
-ukb_data_melanoma = ukb_data_melanoma[fmatch(melanoma_IDs, ukb_data_melanoma$eid),]
-ukb_data_melanoma %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
-ukb_data_melanoma %<>% mutate(melanoma = T, .after = eid)
+cancer_tbl = ukb_data_cancer %>% filter(ICD10_codes == "C43") %>% arrange(diag_date)
+cancer_tbl = cancer_tbl[!duplicated(cancer_tbl$eid),]
+cancer_tbl %<>% mutate(cancer = T, .after = eid)
 
-nonmelanoma_IDs = unique(setdiff(ukb_data_cancer$eid, melanoma_IDs))
-ukb_data_nonmelanoma = ukb_data_cancer %>% filter(eid %in% nonmelanoma_IDs) %>% arrange(diag_date)
-ukb_data_nonmelanoma = ukb_data_nonmelanoma[fmatch(nonmelanoma_IDs, ukb_data_nonmelanoma$eid),]
-ukb_data_nonmelanoma %<>% select(-c(attending_2, attending_3, attending_4, cancer_type, number_of_MAF_1_percent, PTV_burden_of_MAF_1_percent, shet_burden_of_MAF_1_percent))
-ukb_data_nonmelanoma %<>% mutate(melanoma = F, .after = eid)
+nocancer_tbl = ukb_data_cancer %>% filter(is.na(ICD10) | substr(ICD10,1,1) != "C")
+nocancer_tbl = nocancer_tbl[!duplicated(nocancer_tbl$eid),]
+nocancer_tbl %<>% mutate(cancer = F, .after = eid)
 
-ukb_data = rbind(ukb_data_melanoma, ukb_data_nonmelanoma)
-rm(ukb_data_cancer, ukb_data_melanoma, ukb_data_nonmelanoma, melanoma_IDs, nonmelanoma_IDs)
+ukb_data = rbind(cancer_tbl, nocancer_tbl)
+rm(cancer_tbl, nocancer_tbl, ukb_data_cancer)
 
+ukb_data$cancer = as.factor(ukb_data$cancer)
 
 ```
 
@@ -44,31 +41,29 @@ rm(ukb_data_cancer, ukb_data_melanoma, ukb_data_nonmelanoma, melanoma_IDs, nonme
 
 ```{r}
 h2o.init()
-
 set.seed(123)
-ukb_data$melanoma = as.factor(ukb_data$melanoma)
-train <- ukb_data %>% dplyr::sample_frac(0.7)
-test  <- dplyr::anti_join(ukb_data, train, by = 'eid')
-
+train <- ukb_data %>% sample_frac(0.7)
+test  <- anti_join(ukb_data, train, by = 'eid')
 train = as.h2o(train)
 test = as.h2o(test)
 
-
-glm = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "melanoma", training_frame = train)
-glm@model
-
-glm2 = h2o.glm(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_universal_1"), y = "melanoma", training_frame = train)
-glm2@model
-
 # Run AutoML for 20 base models
-aml <- h2o.automl(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "melanoma",
+aml <- h2o.automl(x = c("age", "ethnic_group", "s.color", paste0("gpca_", 1:10), "PTV_burden"), y = "cancer",
                   training_frame = train,
                   max_models = 20,
                   seed = 1)
-
 # View the AutoML Leaderboard
 lb <- aml@leaderboard
 print(lb, n = nrow(lb))  # Print all rows instead of default (6 rows)
+
+mod_ids <- as_tibble(aml@leaderboard$model_id)
+mod_auc <- as_tibble(aml@leaderboard$auc)
+models <- as_tibble(aml@leaderboard)
+save(models, file = "objects/dev_of_disease_automl/melanoma_res")
+
+aml1 <- h2o.getModel(aml@leaderboard[1, 1])
+h2o.saveModel(object = aml1, "objects/dev_of_disease_automl/melanoma_binomial_model")
+
 
 ```
 

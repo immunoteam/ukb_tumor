@@ -1,0 +1,193 @@
+---
+title: "B_Incidence_age_sex_PTV"
+author: "Balazs Koncz"
+date: "2024-07-30"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(ggpubr)
+options(dplyr.summarise.inform = FALSE)
+```
+
+#PTV_universal_1
+
+```{r}
+load("objects/ukb_data_cancer_final")
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+age_inc_tbl = lapply(X = tumors, FUN = function(x){
+  tempdf_x = ukb_data_cancer %>% filter(cancer_type == x) %>% arrange(diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid),]
+  tempdf_x %<>% mutate(inc_time = round(as.numeric((diag_date - birthdate))/365.25),
+                       final_age = case_when(
+                         death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+                         death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25)))
+  
+  tempdf_no_x = ukb_data_cancer %>% filter(is.na(ICD10) | substr(ICD10,1,1) != "C")
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid),]
+  tempdf_no_x %<>% mutate(inc_time = NA, 
+                          final_age = case_when(
+                            death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+                            death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25)))
+  
+  minage = min(c(tempdf_x$inc_time, tempdf_no_x$final_age))
+  maxage = max(c(tempdf_x$inc_time, tempdf_no_x$final_age))
+  
+  res = expand.grid(inc_time = seq(minage, maxage, 1), sex = unique(ukb_data_cancer$sex), PTV_universal_1 = levels(tempdf_x$PTV_universal_1), stringsAsFactors = F) 
+  
+  res_case = tempdf_x %>% group_by(inc_time, sex, PTV_universal_1) %>% summarise(case = n())
+
+  # res_case2 = tempdf_x %>% group_by(inc_time, sex) %>% summarise(case = n()) %>% mutate(PTV_universal_1 = "all", .after = "sex")
+  # res_case_all = rbind(res_case, res_case2)
+  res %<>% left_join(res_case)
+  res$case[is.na(res$case)] = 0
+  
+  res_nocase = tempdf_no_x %>% group_by(final_age, sex, PTV_universal_1) %>% summarise(no_case = n())
+
+
+  res$no_case = 0
+  for(i in 1:nrow(res_nocase)) {
+    res$no_case[res$inc_time <= res_nocase$final_age[i] & res$sex == res_nocase$sex[i] & res$PTV_universal_1 == res_nocase$PTV_universal_1[i]] = res$no_case[res$inc_time <= res_nocase$final_age[i] & res$sex == res_nocase$sex[i] & res$PTV_universal_1 == res_nocase$PTV_universal_1[i]] + res_nocase$no_case[i]
+  }
+  
+  res$PTV_universal_1 = factor(res$PTV_universal_1, levels = levels(tempdf_x$PTV_universal_1))
+  res %<>% mutate(inc = case/(case+no_case)) %>% mutate(tumor = x, .before = "inc_time")
+  res
+})
+age_inc_tbl = bind_rows(age_inc_tbl)
+
+age_inc_plots = lapply(X = tumors, FUN = function(x){
+  res = age_inc_tbl %>% filter(tumor == x)
+  ggplot(res, mapping = aes(x = inc_time, y = inc, color = PTV_universal_1, shape = as.factor(sex))) + 
+    geom_point() + 
+    geom_smooth() +
+    facet_wrap(~sex) + 
+    labs(title = x)
+})
+
+ggarrange(plotlist = age_inc_plots, ncol = 5, nrow = 5)
+ggsave(filename = "plots/age_inc_plot_sex_PTV_universal_1.jpg", width = 100, height = 60, units = "cm", dpi = 300)
+```
+
+#Age intervals
+
+```{r}
+age_inc_tbl2 = lapply(X = tumors, FUN = function(x){
+  tempdf = age_inc_tbl %>% filter(tumor == x)
+  res = expand.grid(inc_time_int = c("10_15", "16_20", "21_25", "26_30", "31_35", "36_40", "41_45", "46_50", "51_55", "56_60", "61_65", "66_70", "71_75", "76_80", "81_85", "86_90"),
+                     sex = unique(ukb_data_cancer$sex),
+                     PTV_universal_1 = levels(tempdf$PTV_universal_1), stringsAsFactors = F)
+  
+  res$case = apply(res, 1, function(y) {
+    tdf = tempdf %>% filter(inc_time >= as.numeric(substr(y[1],1,2)), inc_time <= as.numeric(substr(y[1],4,5)), sex == as.numeric(y[2]), PTV_universal_1 == y[3])
+    sum(tdf$case)
+  })
+  res$no_case = apply(res, 1, function(y) {
+    tdf = tempdf %>% filter(inc_time >= as.numeric(substr(y[1],1,2)), inc_time <= as.numeric(substr(y[1],4,5)), sex == as.numeric(y[2]), PTV_universal_1 == y[3])
+    if(nrow(tdf) == 0) {
+      out = 0
+    } else {
+      out = tdf$no_case[nrow(tdf)]
+    }
+    out
+  })
+  res$PTV_universal_1 = factor(res$PTV_universal_1, levels = levels(tempdf$PTV_universal_1))
+  res %<>% mutate(inc = case/(case+no_case)) %>% mutate(tumor = x, .before = "inc_time_int")
+  res$inc_time_int = factor(res$inc_time_int, levels = c("10_15", "16_20", "21_25", "26_30", "31_35", "36_40", "41_45", "46_50", "51_55", "56_60", "61_65", "66_70", "71_75", "76_80", "81_85", "86_90"))
+  res
+})
+
+age_inc_tbl2 = bind_rows(age_inc_tbl2)
+
+age_inc_plots2 = lapply(X = tumors, FUN = function(x){
+  res = age_inc_tbl2 %>% filter(tumor == x)
+  ggplot(res, mapping = aes(x = inc_time_int, y = inc, color = PTV_universal_1, shape = as.factor(sex))) + 
+    geom_point() + 
+    geom_smooth() +
+    facet_wrap(~sex) + 
+    labs(title = x)
+})
+
+ggarrange(plotlist = age_inc_plots2, ncol = 5, nrow = 5)
+ggsave(filename = "plots/age_int_inc_plot_sex_PTV_universal_1.jpg", width = 100, height = 60, units = "cm", dpi = 300)
+```
+
+#Tumor incidence in patients with the highest PTV burden
+
+```{r}
+load("objects/ukb_data_cancer_final")
+ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+qs = quantile(ukb_data_cancer$PTV_burden, seq(0.1,1,0.05))
+cutoffs = qs[c("75%","80%","85%","90%","95%")]
+
+age_inc_tbl_co = lapply(cutoffs, function(co) {
+  age_inc_tbl = lapply(X = tumors, FUN = function(x){
+    tempdf_x = ukb_data_cancer %>% filter(cancer_type == x) %>% arrange(diag_date)
+    tempdf_x = tempdf_x[!duplicated(tempdf_x$eid),]
+    tempdf_x %<>% mutate(inc_time = round(as.numeric((diag_date - birthdate))/365.25),
+                         final_age = case_when(
+                           death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+                           death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25)),
+                         PTV_burden_group = cut(PTV_burden, breaks = c(0,co,max(qs)+1), right = F))
+    
+    tempdf_no_x = ukb_data_cancer %>% filter(is.na(ICD10) | substr(ICD10,1,1) != "C")
+    tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid),]
+    tempdf_no_x %<>% mutate(inc_time = NA, 
+                            final_age = case_when(
+                              death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+                              death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25)),
+                            PTV_burden_group = cut(PTV_burden, breaks = c(0,co,max(qs)+1), right = F))
+    
+    minage = min(c(tempdf_x$inc_time, tempdf_no_x$final_age))
+    maxage = max(c(tempdf_x$inc_time, tempdf_no_x$final_age))
+    
+    res = expand.grid(inc_time = seq(minage, maxage, 1), sex = unique(ukb_data_cancer$sex), PTV_burden_group = levels(tempdf_x$PTV_burden_group), stringsAsFactors = F) 
+    
+    res_case = tempdf_x %>% group_by(inc_time, sex, PTV_burden_group) %>% summarise(case = n())
+    res %<>% left_join(res_case, by = c("inc_time", "sex", "PTV_burden_group"))
+    res$case[is.na(res$case)] = 0
+    
+    res_nocase = tempdf_no_x %>% group_by(final_age, sex, PTV_burden_group) %>% summarise(no_case = n())
+    
+    res$no_case = 0
+    for(i in 1:nrow(res_nocase)) {
+      res$no_case[res$inc_time <= res_nocase$final_age[i] & res$sex == res_nocase$sex[i] & res$PTV_burden_group == res_nocase$PTV_burden_group[i]] = res$no_case[res$inc_time <= res_nocase$final_age[i] & res$sex == res_nocase$sex[i] & res$PTV_burden_group == res_nocase$PTV_burden_group[i]] + res_nocase$no_case[i]
+    }
+    
+    res$PTV_burden_group = factor(res$PTV_burden_group, levels = levels(tempdf_x$PTV_burden_group))
+    res %<>% 
+      mutate(inc = case/(case+no_case)) %>% 
+      mutate(tumor = x, .before = "inc_time") %>% 
+      mutate(PTVcutoff = co, .before = "inc_time")
+    res$inc[is.nan(res$inc)] = 0
+    res
+  })
+  age_inc_tbl = bind_rows(age_inc_tbl)
+  age_inc_tbl
+})
+
+
+lapply(1:length(age_inc_tbl_co), function(i) {
+  age_inc_plots = lapply(X = tumors, FUN = function(x) {
+    tempdf = age_inc_tbl_co[[i]] %>% filter(tumor == x)
+    ggplot(tempdf, mapping = aes(x = inc_time, y = inc, color = PTV_burden_group, shape = as.factor(sex))) + 
+      geom_point() + 
+      geom_smooth() +
+      facet_wrap(~sex) + 
+      labs(title = x)
+  })
+  ggarrange(plotlist = age_inc_plots, ncol = 5, nrow = 5)
+  ggsave(filename = paste0("plots/age_inc_plot_sex_PTVco", cutoffs[i] ,".jpg"), width = 100, height = 60, units = "cm", dpi = 300)
+})
+
+
+```
+
