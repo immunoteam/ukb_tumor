@@ -19,6 +19,12 @@ library(caret)
 library(tidyverse)
 library(future.apply)
 library(magrittr)
+library(tidycmprsk)
+library(ggsurvfit)
+library(patchwork)
+library(cowplot)
+library(gt)
+library(gtsummary)
 options(dplyr.summarise.inform = F)
 
 
@@ -28,6 +34,7 @@ options(dplyr.summarise.inform = F)
 ```{r}
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
+load("C:/Users/bagil/Desktop/ukb/rawdata/ptvb_im_tsg_pli.gz")
 
 
 
@@ -308,7 +315,7 @@ age_inc_plots = lapply(X = tumors, FUN = function(x){
 })
 
 ggarrange(plotlist = age_inc_plots, ncol = 5, nrow = 5)
-ggsave(filename = "plots/age_inc_plot_sex_PTV_universal_1.jpg", width = 100, height = 60, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_universal_1", width = 100, height = 60, units = "cm", dpi = 300)
 
 ```
 
@@ -825,4 +832,833 @@ ggarrange(plotlist = age_burden_list_3, ncol = 5, nrow = 5, common.legend = T)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/age_incidence_gburden_g3.png",  width = 80, height = 40, units = "cm", dpi = 300)
 
 ```
+
+#Updated PTVs
+##Universal cancer
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+#formula <- as.formula(paste("Surv(ICD_time_year, TF) ~", "DRB1_10"))
+#plot <- cuminc(formula, data = ukb_promisc_fun2) %>%
+          #ggcuminc() +
+          #add_confidence_interval()+
+          #scale_ggsurvfit()+
+          #scale_color_manual(values = c("#27B7EE", "#C255BF"))+
+          #scale_fill_manual(values = c("#A1DBF0", "#C583C3"))+
+          #xlab("Time (years)") +
+          #theme(legend.position = "none")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTV_universal = ukb_data_cancer$PTV_uni_groups,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+tumors = unique(cuminc_table$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+x = 0
+
+tumor_inc_PTVuni = lapply(X = tumors, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, cancer_type == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  tempdf_no_x = subset(cuminc_table, cancer_type != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTV_universal + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTV_universal + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "cum.event") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+  tbl_cuminc(x = cuminc(Surv(inc_age, inc_event) ~ PTV_universal + gender, data = unique_tempdf), times = c(50, 60, 70, 80))
+})
+
+tumor_inc_PTVuni_plot = wrap_plots(tumor_inc_PTVuni, ncol = 6, nrow = 5)
+ggarrange(plotlist = tumor_inc_PTVuni, ncol = 6, nrow = 5)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = tumor_inc_PTVuni_plot, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_inc_PTVuni_plot)
+dev.off()
+
+```
+
+##Cancer type
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTV_canctype_groups = ukb_data_cancer$PTV_canctype_groups,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+tumors = unique(cuminc_table$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+x = 0
+
+tumor_inc_PTVcan = lapply(X = tumors, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, cancer_type == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  tempdf_x$PTV_canctype_groups = as.character(tempdf_x$PTV_canctype_groups)
+  l = sort(unique(tempdf_x$PTV_canctype_groups))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(cuminc_table, cancer_type != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_canctype_groups = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTV_canctype_groups + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTV_canctype_groups + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_inc_PTVcan, ncol = 6, nrow = 5)
+ggarrange(plotlist = tumor_inc_PTVcan, ncol = 6, nrow = 5)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = tumor_inc_PTVuni_plot, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_can_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_can_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_inc_PTVuni_plot)
+dev.off()
+
+```
+
+##Universal hist
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTV_uni_groups = ukb_data_cancer$PTV_uni_groups,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$hist_tumor_cat[is.na(cuminc_table$hist_tumor_cat)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+hist_cat = unique(cuminc_table$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+x = 0
+
+tumor_hist_inc_PTVuni = lapply(X = hist_cat, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, hist_tumor_cat == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  tempdf_no_x = subset(cuminc_table, hist_tumor_cat != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$hist_tumor_cat == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTV_uni_groups + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTV_uni_groups + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+tumor_inc_PTVuni_plot = wrap_plots(tumor_hist_inc_PTVuni, ncol = 3, nrow = 2)
+ggarrange(plotlist = tumor_hist_inc_PTVuni, ncol = 3, nrow = 2)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = tumor_inc_PTVuni_plot, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_uni_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_uni_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_inc_PTVuni_plot)
+dev.off()
+
+
+```
+
+##Hist type
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTV_histtype_groups = ukb_data_cancer$PTV_histtype_groups,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$hist_tumor_cat[is.na(cuminc_table$hist_tumor_cat)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+hist_cat = unique(cuminc_table$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+x = 0
+
+tumor_hist_inc_PTVcan = lapply(X = hist_cat, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, hist_tumor_cat == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  tempdf_x$PTV_histtype_groups = as.character(tempdf_x$PTV_histtype_groups)
+  l = sort(unique(tempdf_x$PTV_histtype_groups))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(cuminc_table, hist_tumor_cat != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$PTV_histtype_groups = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$hist_tumor_cat == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTV_histtype_groups + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTV_histtype_groups + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+ggarrange(plotlist = tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_hist_inc_PTVcan)
+dev.off()
+
+```
+
+##PTVim groups hist
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTVim_group = ukb_data_cancer$PTVim_group,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$hist_tumor_cat[is.na(cuminc_table$hist_tumor_cat)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+hist_cat = unique(cuminc_table$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+x = 0
+
+tumor_hist_inc_PTVim = lapply(X = hist_cat, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, hist_tumor_cat == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  #tempdf_x$PTVim_group = as.character(tempdf_x$PTVim_group)
+  #l = sort(unique(tempdf_x$PTVim_group))
+  #cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(cuminc_table, hist_tumor_cat != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  #unique_tempdf$PTVim_group = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$hist_tumor_cat == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTVim_group + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTVim_group + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+ggarrange(plotlist = tumor_hist_inc_PTVim, ncol = 3, nrow = 2)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVim_hist_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_hist_inc_PTVcan)
+dev.off()
+
+
+
+```
+
+##PTVim cancer
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTVim_group = ukb_data_cancer$PTVim_group,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+tumors = unique(cuminc_table$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+x = 0
+
+tumor_hist_inc_PTVim = lapply(X = tumors, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, cancer_type == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  #tempdf_x$PTVim_group = as.character(tempdf_x$PTVim_group)
+  #l = sort(unique(tempdf_x$PTVim_group))
+  #cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(cuminc_table, cancer_type != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  #unique_tempdf$PTVim_group = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTVim_group + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTVim_group + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+ggarrange(plotlist = tumor_hist_inc_PTVim, ncol = 6, nrow = 5)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVim_can_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_hist_inc_PTVcan)
+dev.off()
+
+
+```
+
+##PTVpli cancer
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTVpli_group = ukb_data_cancer$PTVpli_group,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+tumors = unique(cuminc_table$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+x = 0
+
+tumor_can_inc_PTVpli = lapply(X = tumors, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, cancer_type == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  #tempdf_x$PTVpli_group = as.character(tempdf_x$PTVpli_group)
+  #l = sort(unique(tempdf_x$PTVpli_group))
+  #cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(cuminc_table, cancer_type != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  #unique_tempdf$PTVpli_group = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTVpli_group + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTVpli_group + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+ggarrange(plotlist = tumor_can_inc_PTVpli, ncol = 6, nrow = 5)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVpli_can_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_hist_inc_PTVcan)
+dev.off()
+
+
+```
+
+##PTVpli hist
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTVpli_group = ukb_data_cancer$PTVpli_group,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$hist_tumor_cat[is.na(cuminc_table$hist_tumor_cat)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+hist_cat = unique(cuminc_table$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+x = 0
+
+tumor_hist_inc_PTVpli = lapply(X = hist_cat, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, hist_tumor_cat == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  #tempdf_x$PTVpli_group = as.character(tempdf_x$PTVpli_group)
+  #l = sort(unique(tempdf_x$PTVpli_group))
+  #cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(cuminc_table, hist_tumor_cat != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  #unique_tempdf$PTVpli_group = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$hist_tumor_cat == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTVpli_group + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTVpli_group + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+ggarrange(plotlist = tumor_hist_inc_PTVpli, ncol = 3, nrow = 2)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVpli_hist_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_hist_inc_PTVcan)
+dev.off()
+
+```
+
+##PTVtsg hist
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTVtsg_group = ukb_data_cancer$PTVtsg_group,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$hist_tumor_cat[is.na(cuminc_table$hist_tumor_cat)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+hist_cat = unique(cuminc_table$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+x = 0
+
+tumor_hist_inc_PTVtsg = lapply(X = hist_cat, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, hist_tumor_cat == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  #tempdf_x$PTVtsg_group = as.character(tempdf_x$PTVtsg_group)
+  #l = sort(unique(tempdf_x$PTVtsg_group))
+  #cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  tempdf_no_x = subset(cuminc_table, hist_tumor_cat != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  #unique_tempdf$PTVtsg_group = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$hist_tumor_cat == i, 1, 0))
+  #formula = as.formula(paste("Surv(inc_age, inc_event) ~", "PTVtsg_group + gender", unique_tempdf))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTVtsg_group + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+})
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+ggarrange(plotlist = tumor_hist_inc_PTVtsg, ncol = 3, nrow = 2)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg_hist_inc.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_hist_inc_PTVcan)
+dev.off()
+
+
+```
+
+
+##PTVtsg cancer
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTVtsg_group = ukb_data_cancer$PTVtsg_group,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+tumors = unique(cuminc_table$cancer_type)
+tumors = tumors[tumors %in% c("Colon", "Breast", "Leukemia", "Bladder", "Mesothelioma", "Ovary", "Lung", "Brain/CNS", "Thyroid", "Esophagus", "Liver", "Hodgkin lymphoma", "Stomach", "Cervix", "Testis", "Pancreas")]
+
+
+x = 0
+
+tumor_can_inc_PTVtsg = lapply(X = tumors, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, cancer_type == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  tempdf_no_x = subset(cuminc_table, cancer_type != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == i, 1, 0))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_plot = cuminc(Surv(inc_age, inc_event) ~ PTVtsg_group + gender, data = unique_tempdf) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence for ",i) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+   inc_table = tbl_cuminc(x = cuminc(Surv(inc_age, inc_event) ~ PTVtsg_group + gender, data = unique_tempdf), label_header = "**{time} year**",times = c(30, 40, 50, 60, 70, 80)) %>% 
+    add_nevent(location = c("label", "level")) %>% 
+    add_n(location = c("label", "level")) %>% 
+    add_p()
+  inc_table_df <- as.data.frame(inc_table)
+  inc_table_grob <- tableGrob(inc_table_df)
+  #inc_table_grob = as_gt(inc_table) %>% as_grob()
+  #ggarrange(inc_plot, inc_table_grob, ncol = 1, nrow = 2, heights = c(3, 1))
+  grid.arrange(inc_plot, inc_table_grob, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+})
+
+
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+tumor_inc_PTVtsg = ggarrange(plotlist = tumor_can_inc_PTVtsg, ncol = 4, nrow = 4)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg_can_inc_fin.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg_inc.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_inc_PTVtsg)
+dev.off()
+
+
+```
+
+##PTVtsg table
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = data.frame(birthdate = ukb_data_cancer$birthdate,
+                          sex = ukb_data_cancer$sex,
+                          ethnic_group = ukb_data_cancer$ethnic_group,
+                          attending = ukb_data_cancer$attending_1,
+                          diag_date = ukb_data_cancer$diag_date,
+                          date_of_death = ukb_data_cancer$date_of_death,
+                          death_log = ukb_data_cancer$death,
+                          cancer_type = ukb_data_cancer$cancer_type,
+                          hist_tumor_cat = ukb_data_cancer$hist_tumor_cat,
+                          PTV_burden = ukb_data_cancer$PTV_burden,
+                          PTVtsg_group = ukb_data_cancer$PTVtsg_group,
+                          eid = ukb_data_cancer$eid
+                          )
+rm(ukb_data_cancer)
+cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+tumors = unique(cuminc_table$cancer_type)
+tumors = tumors[tumors %in% c("Colon", "Breast", "Leukemia", "Bladder", "Mesothelioma", "Ovary", "Lung", "Brain/CNS", "Thyroid", "Esophagus", "Liver", "Hodgkin lymphoma", "Stomach", "Cervix", "Testis", "Pancreas")]
+
+
+x = 0
+
+tumor_can_inc_PTVtsg = lapply(X = tumors, FUN = function(i){
+  x = x + 1
+  .GlobalEnv$x = x
+  tempdf_x = subset(cuminc_table, cancer_type == i)
+  tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+  tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+  tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+  tempdf_no_x = subset(cuminc_table, cancer_type != i)
+  tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+  tempdf_no_x %<>% mutate(inc_age = case_when(
+    death_log == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+    death_log == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+  unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+  unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == i, 1, 0))
+  unique_tempdf$gender = as.factor(unique_tempdf$gender)
+  inc_table = tbl_cuminc(x = cuminc(Surv(inc_age, inc_event) ~ PTVtsg_group + gender, data = unique_tempdf), label_header = "**{time} year**",times = c(30, 40, 50, 60, 70, 80)) %>% 
+    add_nevent(location = c("label", "level")) %>% 
+    add_n(location = c("label", "level")) %>% 
+    add_p()
+})
+
+
+
+#tumor_inc_PTVcan_plot = wrap_plots(tumor_hist_inc_PTVcan, ncol = 3, nrow = 2)
+tumor_inc_PTVtsg = ggarrange(plotlist = tumor_can_inc_PTVtsg, ncol = 4, nrow = 4)
+#save_plot(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_uni_inc.png", plot = PTV_hist_inc.pdf, base_width = 150, base_height = 100, units = "cm", limitsize = F, dpi = 300)
+ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg_can_inc_tbl.pdf", width = 150, height = 100, units = "cm", limitsize = F, dpi = 600)
+
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_hist_inc_tbl.png", width = 150, height = 100, units = "cm", res = 300)
+print(tumor_inc_PTVtsg)
+dev.off()
+
+```
+
+
+
+##All tumor
+```{r}
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
+cuminc_table = ukb_data_cancer %>% select(eid, birthdate, sex, ethnic_group, attending_1, diag_date, date_of_death, death, cancer_type, hist_tumor_cat, PTV_burden, PTV_uni_groups, PTVim_group, PTVpli_group, PTVtsg_group)
+
+
+rm(ukb_data_cancer)
+cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
+
+has_tumor = cuminc_table %>% filter(cancer_type != "No_cancer")
+no_tumor = cuminc_table %>% filter(cancer_type == "No_cancer")
+
+
+
+has_tumor = dplyr::arrange(has_tumor, diag_date)
+has_tumor = has_tumor[!duplicated(has_tumor$eid), ]
+has_tumor %<>% mutate(time = floor(as.numeric(diag_date - birthdate)/365.25))
+
+no_tumor = no_tumor[!duplicated(no_tumor$eid), ]
+no_tumor %<>% mutate(time = case_when(
+    death == T ~ floor(as.numeric(date_of_death - birthdate)/365.25),
+    death == F ~ floor(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+  ))
+
+cuminc_table = rbind(has_tumor, no_tumor)
+cuminc_table$event = ifelse(cuminc_table$cancer_type == "No_cancer", 0, 1)
+
+cuminc_table$gender = as.factor(cuminc_table$gender)
+cuminc_table$event = as.factor(cuminc_table$event)
+cuminc(Surv(time, event) ~ PTVtsg_group + gender, data = cuminc_table) %>%
+    ggcuminc() +
+    add_pvalue(location = "annotation") +
+    add_confidence_interval() +
+    add_risktable(risktable_stats = "n.risk") +
+    scale_ggsurvfit() +
+    xlab("Time (years)") +
+    ggtitle("Incidence of any tumor") +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+          legend.position = "right")
+
+
+
+
+```
+
 

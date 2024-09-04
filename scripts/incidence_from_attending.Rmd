@@ -607,6 +607,7 @@ ggsave(filename ="C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Inciden
 
 tumors = unique(ukb_data_cancer$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 i = 0
 
 PTV_tumor_attending_forest_plot = lapply(X = tumors, FUN = function(x){
@@ -637,15 +638,15 @@ PTV_tumor_attending_forest_plot = lapply(X = tumors, FUN = function(x){
     pull(ethnic_group) %>% 
     unique()
   if (length(l) == 1 & length(unique(tempdf_x$sex)) == 1){
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   } else if(length(l) == 1 & length(unique(tempdf_x$sex)) == 2){
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   } else if(length(l) > 1 & length(unique(tempdf_x$sex)) == 1){
     unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   } else {
     unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   }
   ggforest(hr_model, data = as.data.frame(unique_tempdf), main = paste0("Hazard ratio of ", x))
 })
@@ -692,21 +693,21 @@ PTV_tumor_attending_forest_plot = lapply(X = hist_cat, FUN = function(x){
     pull(ethnic_group) %>% 
     unique()
   if (length(l) == 1 & length(unique(tempdf_x$sex)) == 1){
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   } else if(length(l) == 1 & length(unique(tempdf_x$sex)) == 2){
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   } else if(length(l) > 1 & length(unique(tempdf_x$sex)) == 1){
     unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   } else {
     unique_tempdf$ethnic_group = factor(unique_tempdf$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
-    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + ethnic_group + gpca_1 + gpca_2 + gpca_3 + gpca_4 + gpca_5 + gpca_6 + gpca_7 + gpca_8 + gpca_9 + gpca_10, data = unique_tempdf)
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTV_burden + sex + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = unique_tempdf)
   }
   ggforest(hr_model, data = as.data.frame(unique_tempdf), main = paste0("Hazard ratio of ", x))
 })
 
-PTV_attending_cox_forest = ggarrange(plotlist = PTV_tumor_attending_forest_plot, ncol = 3, nrow = 2)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/tumor_cat_forest_a.png", plot = PTV_attending_cox_forest, width = 120, height = 50, units = "cm", limitsize = F, dpi = 300)
+PTV_attending_cox_forest = ggarrange(plotlist = PTV_tumor_attending_forest_plot, ncol = 4, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/tumor_cat_forest_a.png", plot = PTV_attending_cox_forest, width = 90, height = 70, units = "cm", limitsize = F, dpi = 300)
 
 
 ```
@@ -944,6 +945,7 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incide
 
 tumors = unique(ukb_data_cancer$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
 plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
@@ -974,18 +976,19 @@ plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
+ggarrange(plotlist =  plotlist_PTV1, ncol = 6, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/cancer_type_1_PTV_attending_cancer.png", width = 150, height = 80, units = "cm", dpi = 300, limitsize = F)
 
 
 
 ```
 
-
+##Cancer type 2
 ```{r}
 
 tumors = unique(ukb_data_cancer$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
 plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
@@ -1016,16 +1019,17 @@ plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
+ggarrange(plotlist =  plotlist_PTV1, ncol = 6, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/cancer_type_2_PTV_attending_cancer.png", width = 150, height = 80, units = "cm", dpi = 300, limitsize = F)
 
 ```
 
-##CAncer type 3
+##Cancer type 3
 ```{r}
 
 tumors = unique(ukb_data_cancer$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
 plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
@@ -1056,7 +1060,7 @@ plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
+ggarrange(plotlist =  plotlist_PTV1, ncol = 6, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/cancer_type_3_PTV_attending_cancer.png", width = 150, height = 80, units = "cm", dpi = 300, limitsize = F)
 
 ```
@@ -1067,6 +1071,7 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incide
 
 tumors = unique(ukb_data_cancer$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
 plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
@@ -1091,7 +1096,7 @@ plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
+ggarrange(plotlist =  plotlist_PTV1, ncol = 6, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/cancer_type_PTV_universal_1_attending.png", width = 150, height = 80, units = "cm", dpi = 300, limitsize = F)
 
 ```
@@ -1101,6 +1106,7 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incide
 
 tumors = unique(ukb_data_cancer$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
 plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   tempdf_x = subset(ukb_data_cancer, cancer_type == x)
@@ -1125,7 +1131,7 @@ plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
+ggarrange(plotlist =  plotlist_PTV1, ncol = 6, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/cancer_type_PTV_universal_2_attending.png", width = 150, height = 80, units = "cm", dpi = 300, limitsize = F)
 
 ```
@@ -1159,7 +1165,7 @@ plotlist_PTV1 = lapply(X = tumors, FUN = function(x){
   grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
 })
 
-ggarrange(plotlist =  plotlist_PTV1, ncol = 5, nrow = 5)
+ggarrange(plotlist =  plotlist_PTV1, ncol = 6, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Incidence_from_attending/cancer_type_PTV_cancer_attending.png", width = 150, height = 80, units = "cm", dpi = 300, limitsize = F)
 
 

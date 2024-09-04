@@ -5,7 +5,7 @@ date: "2024-01-16"
 output: html_document
 ---
 
-#Libaries
+d#Libaries
 ```{r}
 library(ggpubr)
 library(fastmatch)
@@ -168,9 +168,9 @@ load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_1")
 #cancer datas
 ```{r}
 
-histology_of_cancer = read.table("C:/Users/bagil/Desktop/ukb/40011.txt", header = T) #40011
-type_of_cancer = read.table("C:/Users/bagil/Desktop/ukb/40006.txt", header = T) #40006
-date_of_cancer_diag = read.table("C:/Users/bagil/Desktop/ukb/40005.txt", header = T) #40005
+histology_of_cancer = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40011.txt", header = T) #40011
+type_of_cancer = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40006.txt", header = T) #40006
+date_of_cancer_diag = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40005.txt", header = T) #40005
 
 
 plan(multisession)
@@ -331,7 +331,17 @@ icd_only_datas=data.frame(ICD10 =c("C32", "C15", "C16","C18","C22", "C25", "C61"
                           cancer_type = c("Larynx","Esophagus", "Stomach", "Colon", "Liver", "Pancreas", "Prostate", "Testis", "Bladder","Breast",  "Cervix", "Endometrium", "Ovary", "Hodgkin lymphoma", "Mesothelioma", "Melanoma", "Thyroid", "Non-Hodgkin lymphoma", "Multiple myeloma", "Multiple myeloma"))
 icd_mapping = rbind(icd_only_datas, icd_brain,icd_lung, icd_leukemia, icd_non_h_lymph, icd_kidney, icd_rectum,icd_oral)
 rm(icd_brain, icd_kidney, icd_only_datas, icd_lung, icd_leukemia, icd_non_h_lymph, icd_rectum, icd_oral)
-save(file = "C:/Users/bagil/Desktop/ukb/objects/icd_mapping", icd_mapping)
+
+icd_cancer_codes = sort(unique(substr(cancer_data$ICD10, 1, 3)))
+icd_cancer_codes = icd_cancer_codes[substr(icd_cancer_codes, 1, 1) == "C"]
+setdiff(icd_cancer_codes, icd_mapping$ICD10)
+icd_canc_codes_df = data.frame(ICD10 = setdiff(icd_cancer_codes, icd_mapping$ICD10), cancer_type = "other")
+icd_mapping = rbind(icd_mapping, icd_canc_codes_df)
+icd_mapping %<>% arrange(ICD10) 
+
+save(icd_mapping, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
+
+
 
 
 ```
@@ -341,45 +351,56 @@ save(file = "C:/Users/bagil/Desktop/ukb/objects/icd_mapping", icd_mapping)
 ```{r}
 load("C:/Users/bagil/Desktop/ukb/objects/cancer_data_1")
 load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_1")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
 
 cancer_data_f = cancer_data[,c("eid", "diag_date", "ICD_hist", "ICD10", "histology", "age_at_cancer")]
+cancer_data_f$ICD10_codes = substr(cancer_data_f$ICD10, 1, 3)
+cancer_data_f$cancer_type = icd_mapping$cancer_type[fmatch(cancer_data_f$ICD10_codes, icd_mapping$ICD10)]
+cancer_data_f$cancer_type[substr(cancer_data_f$ICD10_codes, 1, 1) == "D"] = "Benign"
+cancer_data_f$cancer_type[substr(cancer_data_f$ICD10_codes, 1, 1) == "O"] = "Hydatidiform_mole"
+cancer_data_f$cancer_type[is.na(cancer_data_f$ICD10_codes)] = "undef"
 
+#Left join with ukb 
 ukb_data_cancer = left_join(ukb_data, cancer_data_f, by = "eid")
 
-load("C:/Users/bagil/Desktop/ukb/objects/icd_mapping")
 #cutting the ICD10 codes
-
 ukb_data_cancer$ICD10_codes = substr(ukb_data_cancer$ICD10, 1, 3)
-cancer_data$ICD10_codes = substr(cancer_data$ICD10, 1, 3)
+
 
 #matching
-ukb_data_cancer$cancer_type = icd_mapping$cancer_type[match(ukb_data_cancer$ICD10_codes, icd_mapping$ICD10)]
-cancer_data$cancer_type = icd_mapping$cancer_type[match(cancer_data$ICD10_codes, icd_mapping$ICD10)]
+#ukb_data_cancer$cancer_type = cancer_data_f$cancer_type[fmatch(ukb_data_cancer$ICD10_codes, cancer_data_f$ICD10)]
+ukb_data_cancer$cancer_type[substr(ukb_data_cancer$ICD10_codes, 1, 1) == "D"] = "Benign"
+ukb_data_cancer$cancer_type[substr(ukb_data_cancer$ICD10_codes, 1, 1) == "O"] = "Hydatidiform_mole"
 ukb_data_cancer$cancer_type[is.na(ukb_data_cancer$cancer_type)] = "No_cancer"
+
+cancer_data$ICD10_codes = substr(cancer_data$ICD10, 1, 3)
+cancer_data$cancer_type = cancer_data_f$cancer_type[fmatch(cancer_data$ICD10_codes, cancer_data_f$ICD10_codes)]
+
+ukb_data_cancer_raw = ukb_data_cancer
+cancer_data_raw = cancer_data
+
 rm(cancer_data_f)
 
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 
-save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
-save(cancer_data, file = "C:/Users/bagil/Desktop/ukb/objects/cancer_data_final")
+save(ukb_data_cancer_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_raw")
+save(cancer_data_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final_raw")
+
 ```
 
 
 #Genetic_PCAs
 ```{r}
 #Clean gpca
-genetic_pca = fread("C:/Users/bagil/Desktop/ukb/ukb_genetic_pca_40.tsv")
-genetic_pca_clean = genetic_pca[,1:3]
-genetic_pca_clean = pivot_wider(data = genetic_pca_clean, id_cols = eid, names_from = UKB_column_name, values_from = value)
-save(genetic_pca_clean, file = "C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
-load("C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
+
 
 #Match
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_raw")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final_raw")
 
-colnames(genetic_pca_clean)[2:42] = paste0("gpca", 1:40)
-cancer_data %<>%
-  left_join(genetic_pca_clean, by = "eid")
+
+
+
 
 
 ```
@@ -389,6 +410,8 @@ cancer_data %<>%
 genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/specific_ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.7z")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final") 
+
+
 
 
 file_path <- "C:/Users/bagil/Desktop/ukb/rawdata/specific_ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.7z"
@@ -413,6 +436,8 @@ if(length(extracted_files) > 0) {
 #PTV burdens
 
 #ukb_data_cancer$PTV_burden = cut(ukb_data_cancer$PTV_burden_of_MAF_1_percent, breaks = c(min(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T), median(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T), max(ukb_data_cancer$PTV_burden_of_MAF_1_percent, na.rm = T)), labels = c("Low", "High"), include.lowest = T, right = T)
+
+genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/specific_ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.tsv")
 
 colnames(genetic_PTV)[c(1,3)] = c("eid", "PTV_burden")
 genetic_PTV = genetic_PTV[,c("eid", "PTV_burden")]
@@ -448,6 +473,7 @@ cancer_data %<>%
   dplyr::filter(!is.na(PTV_burden))
 
 save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 
 ```
 
@@ -455,52 +481,102 @@ save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_
 ```{r}
 #Files
 genetic_PTV = fread("C:/Users/bagil/Desktop/ukb/rawdata/specific_ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.tsv")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final") 
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final_raw")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_raw") 
 
 #Colnames
 colnames(genetic_PTV)[c(1,3)] = c("eid", "PTV_burden")
 genetic_PTV = genetic_PTV[,c("eid", "PTV_burden")]
 
 #UKB datas
-ukb_data_cancer$PTV_burden = genetic_PTV$PTV_burden[fmatch(ukb_data_cancer$eid, genetic_PTV$eid)]
-#3 different group
-ukb_data_cancer$PTV_burden_group = cut(ukb_data_cancer$PTV_burden, breaks = quantile(ukb_data_cancer$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
+ukb_data_cancer_raw$PTV_burden = genetic_PTV$PTV_burden[fmatch(ukb_data_cancer_raw$eid, genetic_PTV$eid)]
+ukb_data_cancer_PTV_raw = ukb_data_cancer_raw
 
-ukb_data_cancer$PTV_burden_group_2 = cut(ukb_data_cancer$PTV_burden, breaks = c(min(ukb_data_cancer$PTV_burden, na.rm = T), 8, 19, max(ukb_data_cancer$PTV_burden, na.rm = T)), labels = c("Low", "Medium","High"), include.lowest = T, right = T, ordered_result = T)
-table(ukb_data_cancer$PTV_burden_group_2)
-
-ukb_data_cancer$PTV_burden_group_3 = cut(ukb_data_cancer$PTV_burden, breaks = c(min(ukb_data_cancer$PTV_burden, na.rm = T), 6, 30, max(ukb_data_cancer$PTV_burden, na.rm = T)), labels = c("Low", "Medium","High"), include.lowest = T, right = T, ordered_result = T)
-
-ukb_data_cancer %<>% 
+ukb_data_cancer_PTV_raw %<>% 
   dplyr::filter(!is.na(PTV_burden))
-save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+
 
 #Cancer datas
-cancer_data$PTV_burden = genetic_PTV$PTV_burden[fmatch(cancer_data$eid, genetic_PTV$eid)]
-#3 different group
-cancer_data$PTV_burden_group = cut(cancer_data$PTV_burden, breaks = quantile(cancer_data$PTV_burden, probs = c(0, 0.5, 1), na.rm = T), labels = c("Low", "High"), include.lowest = T, right = T)
-table(cancer_data$PTV_burden_group)
+cancer_data_raw$PTV_burden = genetic_PTV$PTV_burden[fmatch(cancer_data_raw$eid, genetic_PTV$eid)]
+cancer_data_PTV_raw = cancer_data_raw
 
-cancer_data$PTV_burden_group_2 = cut(cancer_data$PTV_burden, breaks = c(min(cancer_data$PTV_burden, na.rm = T), 8, 19, max(cancer_data$PTV_burden, na.rm = T)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
-table(cancer_data$PTV_burden_group_2)
-
-cancer_data$PTV_burden_group_3 = cut(cancer_data$PTV_burden, breaks = c(min(cancer_data$PTV_burden, na.rm = T), 6, 30, max(cancer_data$PTV_burden, na.rm = T)), labels = c("Low", "Medium","High"), include.lowest = T, right = T)
-cancer_data$PTV_burden_group_3 = factor(cancer_data$PTV_burden_group_3, ordered = T)
-table(cancer_data$PTV_burden_group_3)
-
-cancer_data %<>% 
+cancer_data_PTV_raw %<>% 
   dplyr::filter(!is.na(PTV_burden))
 
-save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+save(cancer_data_PTV_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_PTV_raw")
+save(ukb_data_cancer_PTV_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_PTV_raw")
 
 ```
 
+##PTV by cats
+```{r}
+#Files
+load("C:/Users/bagil/Desktop/ukb/rawdata/ptvb_im_tsg_pli.gz")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_PTV_raw")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_PTV_raw")
+
+
+colnames(ptvb)[1] = "eid"
+#Cancer table
+cancer_data_PTV_raw$eid = as.character(cancer_data_PTV_raw$eid)
+
+cancer_data_PTV_raw %<>% 
+  left_join(ptvb, by = "eid")
+
+#Ukb table
+ukb_data_cancer_PTV_raw$eid = as.character(ukb_data_cancer_PTV_raw$eid)
+
+ukb_data_cancer_PTV_raw %<>% 
+  left_join(ptvb, by = "eid")
+
+save(cancer_data_PTV_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_PTV_raw")
+save(ukb_data_cancer_PTV_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_PTV_raw")
+
+
+
+
+```
+
+#Add PCAs
+```{r}
+#Genetic PCA clean
+genetic_pca = fread("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/ukb_genetic_pca_40.tsv")
+genetic_pca_clean = genetic_pca[,1:3]
+genetic_pca_clean = pivot_wider(data = genetic_pca_clean, id_cols = eid, names_from = UKB_column_name, values_from = value)
+genetic_pca_clean$eid = as.character(genetic_pca_clean$eid)
+#save(genetic_pca_clean, file = "C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
+load("C:/Users/bagil/Desktop/ukb/objects/genetic_pca_clean")
+
+#Add tables
+colnames(genetic_pca_clean)[2:42] = paste0("gpca", 1:40)
+cancer_data_PTV_raw %<>%
+  left_join(genetic_pca_clean, by = "eid")
+
+colnames(genetic_pca_clean)[2:42] = paste0("gpca", 1:40)
+ukb_data_cancer_PTV_raw %<>%
+  left_join(genetic_pca_clean, by = "eid")
+
+ukb_data_cancer_PCA = ukb_data_cancer_PTV_raw 
+cancer_data_PCA = cancer_data_PTV_raw
+
+save(ukb_data_cancer_PCA, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_PCA")
+save(cancer_data_PTV_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_PCA")
+
+```
+
+
 #PTV quantiles
 ```{r}
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/q_cut_off")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_PCA")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_PCA")
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/q_cut_off")
+
+
+ukb_data_cancer = ukb_data_cancer_PCA
+cancer_data = cancer_data_PTV_raw
+
+rm(ukb_data_cancer_PCA, cancer_data_PTV_raw)
+
 
 tumors = unique(ukb_data_cancer$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
@@ -512,33 +588,42 @@ q_all = ukb_data_cancer %>%
   select(eid, PTV_burden) %>% 
   unique() %>% 
   pull(PTV_burden) %>% 
-  quantile(probs = seq(0, 1, 0.05)) 
+  quantile(probs = seq(0, 1, 0.05), na.rm = T) 
 q_all[c("10%", "20%")]
 
 #Add to ukb
+#Can not add
 ukb_data_cancer = ukb_data_cancer %>%
-  mutate(PTV_universal_1 = cut(PTV_burden, breaks = q_all[c("0%","10%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
-  mutate(PTV_universal_2 = cut(PTV_burden, breaks = q_all[c("0%","10%", "20%", "30%", "70%", "80%", "90%", "100%")], include.lowest = T))
+  mutate(PTV_universal_1 = cut(PTV_burden, breaks = q_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTV_universal_2 = cut(PTV_burden, breaks = q_all[c("0%", "20%", "80%", "100%")], include.lowest = T)) %>% 
+  mutate(PTV_universal_3 = cut(PTV_burden, breaks = q_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
 
 cancer_data = cancer_data %>%
-  mutate(PTV_universal_1 = cut(PTV_burden, breaks = q_all[c("0%","10%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
-  mutate(PTV_universal_2 = cut(PTV_burden, breaks = q_all[c("0%","10%", "20%", "30%", "70%", "80%", "90%", "100%")], include.lowest = T))
+  mutate(PTV_universal_1 = cut(PTV_burden, breaks = q_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTV_universal_2 = cut(PTV_burden, breaks = q_all[c("0%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTV_universal_3 = cut(PTV_burden, breaks = q_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
+#PTV group 0-90%
+ukb_data_cancer = ukb_data_cancer %>%
+  mutate(PTV_uni_groups = cut(PTV_burden, breaks = q_all[c("0%", "90%", "100%")], include.lowest = T)) 
 
 #Only cancer
-q_cancer = ukb_data_cancer %>% 
-  filter(cancer_type != "No_cancer") %>% 
-  select(eid, PTV_burden) %>% 
-  unique() %>% 
-  pull(PTV_burden) %>% 
-  quantile(probs = seq(0, 1, 0.05))
+#q_cancer = ukb_data_cancer %>% 
+  #filter(cancer_type != "No_cancer") %>% 
+  #select(eid, PTV_burden) %>% 
+  #unique() %>% 
+  #pull(PTV_burden) %>% 
+  #quantile(probs = seq(0, 1, 0.05), na.rm = T)
+#q_cancer[c("10%", "20%")]
 #Add to ukb
-ukb_data_cancer = ukb_data_cancer %>%
-  mutate(PTV_cancer_1 = cut(PTV_burden, breaks = q_cancer[c("0%","10%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
-  mutate(PTV_cancer_2 = cut(PTV_burden, breaks = q_cancer[c("0%","10%", "20%", "30%", "70%", "80%", "90%", "100%")],include.lowest = T))
+#ukb_data_cancer = ukb_data_cancer %>%
+  #mutate(PTV_cancer_1 = cut(PTV_burden, breaks = q_cancer[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  #mutate(PTV_cancer_2 = cut(PTV_burden, breaks = q_cancer[c("0%", "20%", "80%", "90%", "100%")],include.lowest = T)) %>% 
+  #mutate(PTV_universal_3 = cut(PTV_burden, breaks = q_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
 
-cancer_data = cancer_data %>% 
-  mutate(PTV_cancer_1 = cut(PTV_burden, breaks = q_cancer[c("0%","10%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
-  mutate(PTV_cancer_2 = cut(PTV_burden, breaks = q_cancer[c("0%","10%", "20%", "30%", "70%", "80%", "90%", "100%")],include.lowest = T))
+#cancer_data = cancer_data %>% 
+  #mutate(PTV_cancer_1 = cut(PTV_burden, breaks = q_cancer[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  #mutate(PTV_cancer_2 = cut(PTV_burden, breaks = q_cancer[c("0%", "20%", "80%", "90%", "100%")],include.lowest = T)) %>% 
+  #mutate(PTV_universal_3 = cut(PTV_burden, breaks = q_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
 
 #Tumor specific by cancer type
 q_tumor_spec = lapply(X = tumors, FUN = function(x){
@@ -547,7 +632,7 @@ q_tumor_spec = lapply(X = tumors, FUN = function(x){
     select(eid, PTV_burden) %>% 
     unique() %>% 
     pull(PTV_burden) %>% 
-    quantile(probs = seq(0, 1, 0.05))
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
 })
 names(q_tumor_spec) = tumors
 q_tumor_spec[["Pancreas"]][c("5%", "95%")]
@@ -557,23 +642,29 @@ cancer_data_list = lapply(X = tumors, FUN = function(t){
   tempdf = cancer_data %>% filter(cancer_type == t)
   tempdf %>% 
     mutate(PTV_cancer_type_1 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec[[t]][c("0%","20%", "80%", "100%")]),
+                            breaks = unique(q_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
                             include.lowest = TRUE)) %>% 
     mutate(PTV_cancer_type_2 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec[[t]][c("0%","10%" ,"20%", "80%", "90%", "100%")]),
+                            breaks = unique(q_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
                             include.lowest = TRUE)) %>%
     mutate(PTV_cancer_type_3 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec[[t]][c("0%","5%" ,"6%", "94%", "95%", "100%")]),
+                            breaks = unique(q_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
                             include.lowest = TRUE)) %>%
+    mutate(PTV_canctype_groups = cut(PTV_burden,
+                            breaks = unique(q_tumor_spec[[t]][c("0%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
     ungroup()
 })
+
+
+
 cancer_data = bind_rows(cancer_data_list)
 
 ukb_data_no_cancer = ukb_data_cancer %>% filter(cancer_type == "No_cancer")
 
-ukb_data_no_cancer %<>% mutate(PTV_cancer_type_1 = NA, PTV_cancer_type_2 = NA)
+ukb_data_no_cancer %<>% mutate(PTV_cancer_type_1 = NA, PTV_cancer_type_2 = NA, PTV_cancer_type_3 = NA, PTV_canctype_groups = NA )
 
-columns_to_convert = c("PTV_cancer_type_1", "PTV_cancer_type_2")
+columns_to_convert = c("PTV_cancer_type_1", "PTV_cancer_type_2", "PTV_cancer_type_3", "PTV_canctype_groups")
 
 ukb_data_no_cancer = ukb_data_no_cancer %>%
   mutate(across(all_of(columns_to_convert), as.factor))
@@ -582,13 +673,16 @@ ukb_data_cancer_list = lapply(X = tumors, FUN = function(t){
   tempdf = ukb_data_cancer %>% filter(cancer_type == t)
   tempdf %>% 
     mutate(PTV_cancer_type_1 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec[[t]][c("0%","20%", "80%", "100%")]),
+                            breaks = unique(q_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
                             include.lowest = TRUE)) %>% 
     mutate(PTV_cancer_type_2 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec[[t]][c("0%","10%" ,"20%", "80%", "90%", "100%")]),
+                            breaks = unique(q_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
                             include.lowest = TRUE)) %>% 
     mutate(PTV_cancer_type_3 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec[[t]][c("0%","5%" ,"6%", "94%", "95%", "100%")]),
+                            breaks = unique(q_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    mutate(PTV_canctype_groups = cut(PTV_burden,
+                            breaks = unique(q_tumor_spec[[t]][c("0%", "90%", "100%")]),
                             include.lowest = TRUE)) %>%
     ungroup()
 })
@@ -604,7 +698,7 @@ q_tumor_spec_hist = lapply(X = tumors_hist, FUN = function(x){
     select(eid, PTV_burden) %>% 
     unique() %>% 
     pull(PTV_burden) %>% 
-    quantile(probs = seq(0, 1, 0.05))
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
 })
 names(q_tumor_spec_hist) = tumors_hist
 q_tumor_spec_hist[["carcinoma"]][c("10%", "20%")]
@@ -613,21 +707,23 @@ cancer_data_list_hist = lapply(X = tumors_hist, FUN = function(t){
   tempdf = cancer_data %>% filter(hist_tumor_cat == t)
   tempdf %>% 
     mutate(PTV_hist_type_1 = cut(PTV_burden,
-                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","20%", "80%", "100%")]),
+                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
                                  include.lowest = TRUE)) %>% 
     mutate(PTV_hist_type_2 = cut(PTV_burden,
-                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","10%" ,"20%", "80%", "90%", "100%")]), include.lowest = TRUE)) %>% 
+                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]), include.lowest = TRUE)) %>% 
     mutate(PTV_hist_type_3 = cut(PTV_burden,
-                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","5%" ,"6%", "94%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    mutate(PTV_histtype_groups = cut(PTV_burden,
+                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%", "90%", "100%")]), include.lowest = TRUE)) %>% 
     ungroup()
 })
 cancer_data = bind_rows(cancer_data_list_hist)
 
 ukb_data_no_cancer = ukb_data_cancer %>% filter(hist_tumor_cat == "No_cancer")
 
-ukb_data_no_cancer %<>% mutate(PTV_hist_type_1 = NA, PTV_hist_type_2 = NA, PTV_hist_type_3 = NA)
+ukb_data_no_cancer %<>% mutate(PTV_hist_type_1 = NA, PTV_hist_type_2 = NA, PTV_hist_type_3 = NA, PTV_histtype_groups = NA)
 
-columns_to_convert = c("PTV_hist_type_1", "PTV_hist_type_2", "PTV_hist_type_3")
+columns_to_convert = c("PTV_hist_type_1", "PTV_hist_type_2", "PTV_hist_type_3", "PTV_histtype_groups")
 
 ukb_data_no_cancer = ukb_data_no_cancer %>%
   mutate(across(all_of(columns_to_convert), as.factor))
@@ -635,19 +731,21 @@ ukb_data_cancer_list_hist = lapply(X = tumors_hist, FUN = function(t){
   tempdf = ukb_data_cancer %>% filter(hist_tumor_cat == t)
   tempdf %>% 
     mutate(PTV_hist_type_1 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec_hist[[t]][c("0%","20%", "80%", "100%")]),
+                            breaks = unique(q_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
                             include.lowest = TRUE)) %>% 
     mutate(PTV_hist_type_2 = cut(PTV_burden,
-                            breaks = unique(q_tumor_spec_hist[[t]][c("0%","10%" ,"20%", "80%", "90%", "100%")]),
+                            breaks = unique(q_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]),
                             include.lowest = TRUE)) %>% 
     mutate(PTV_hist_type_3 = cut(PTV_burden,
-                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","5%" ,"6%", "94%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    mutate(PTV_histtype_groups = cut(PTV_burden,
+                                 breaks = unique(q_tumor_spec_hist[[t]][c("0%", "90%", "100%")]), include.lowest = TRUE)) %>% 
     ungroup()
 })
 ukb_data_cancer = rbind(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list_hist))
 
 
-save(q_tumor_spec, q_all, q_cancer, q_tumor_spec_hist, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/q_cut_off")
+save(q_tumor_spec, q_all, q_tumor_spec_hist, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/q_cut_off")
 
 
 
@@ -685,6 +783,462 @@ ukb_data_cancer %<>%
 
 ```
 
+##Quantiles for PTVim
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
+
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+#Uiversal
+q_im_all = ukb_data_cancer %>% 
+  select(eid, PTVim) %>% 
+  unique() %>% 
+  pull(PTVim) %>% 
+  quantile(probs = seq(0, 1, 0.05), na.rm = T) 
+q_im_all[c("30%", "40%")]
+
+#Add to ukb
+ukb_data_cancer = ukb_data_cancer %>%
+  mutate(PTVim_universal_1 = cut(PTVim, breaks = q_im_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVim_universal_2 = cut(PTVim, breaks = q_im_all[c("0%", "20%", "80%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVim_universal_3 = cut(PTVim, breaks = q_im_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
+
+cancer_data = cancer_data %>%
+  mutate(PTVim_universal_1 = cut(PTVim, breaks = q_im_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVim_universal_2 = cut(PTVim, breaks = q_im_all[c("0%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVim_universal_3 = cut(PTVim, breaks = q_im_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
+
+#Tumor specific by cancer type
+q_PTvim_tumor_spec = lapply(X = tumors, FUN = function(x){
+  ukb_data_cancer %>% 
+    filter(cancer_type == x) %>% 
+    select(eid, PTVim) %>% 
+    unique() %>% 
+    pull(PTVim) %>% 
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
+})
+names(q_PTvim_tumor_spec) = tumors
+q_PTvim_tumor_spec[["Pancreas"]][c("5%", "95%")]
+#Add to ukb
+
+cancer_data_list = lapply(X = tumors, FUN = function(t){
+  tempdf = cancer_data %>% filter(cancer_type == t)
+  tempdf %>% 
+    mutate(PTVim_cancer_type_1 = cut(PTVim,
+                            breaks = unique(q_PTvim_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVim_cancer_type_2 = cut(PTVim,
+                            breaks = unique(q_PTvim_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    mutate(PTVim_cancer_type_3 = cut(PTVim,
+                            breaks = unique(q_PTvim_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    ungroup()
+})
+
+cancer_data = bind_rows(cancer_data_list)
+
+ukb_data_no_cancer = ukb_data_cancer %>% filter(cancer_type == "No_cancer")
+
+ukb_data_no_cancer %<>% mutate(PTVim_cancer_type_1 = NA, PTVim_cancer_type_2 = NA, PTVim_cancer_type_3 = NA)
+
+columns_to_convert = c("PTVim_cancer_type_1", "PTVim_cancer_type_2", "PTVim_cancer_type_3")
+
+ukb_data_no_cancer = ukb_data_no_cancer %>%
+  mutate(across(all_of(columns_to_convert), as.factor))
+ 
+ukb_data_cancer_list = lapply(X = tumors, FUN = function(t){
+  tempdf = ukb_data_cancer %>% filter(cancer_type == t)
+  tempdf %>% 
+    mutate(PTVim_cancer_type_1 = cut(PTVim,
+                            breaks = unique(q_PTvim_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVim_cancer_type_2 = cut(PTVim,
+                            breaks = unique(q_PTvim_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVim_cancer_type_3 = cut(PTVim,
+                            breaks = unique(q_PTvim_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    ungroup()
+})
+ukb_data_cancer = bind_rows(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list))
+
+#Tumor specific by histology group
+
+tumors_hist = unique(ukb_data_cancer$hist_tumor_cat)
+tumors_hist = tumors_hist[tumors_hist != "No_cancer"]
+q_PTVim_tumor_spec_hist = lapply(X = tumors_hist, FUN = function(x){
+  ukb_data_cancer %>% 
+    filter(hist_tumor_cat == x) %>% 
+    select(eid, PTVim) %>% 
+    unique() %>% 
+    pull(PTVim) %>% 
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
+})
+names(q_PTVim_tumor_spec_hist) = tumors_hist
+q_PTVim_tumor_spec_hist[["carcinoma"]][c("10%", "20%")]
+#Add to ukb
+cancer_data_list_hist = lapply(X = tumors_hist, FUN = function(t){
+  tempdf = cancer_data %>% filter(hist_tumor_cat == t)
+  tempdf %>% 
+    mutate(PTVim_hist_type_1 = cut(PTVim,
+                                 breaks = unique(q_PTVim_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
+                                 include.lowest = TRUE)) %>% 
+    mutate(PTVim_hist_type_2 = cut(PTVim,
+                                 breaks = unique(q_PTVim_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]), include.lowest = TRUE)) %>% 
+    mutate(PTVim_hist_type_3 = cut(PTVim,
+                                 breaks = unique(q_PTVim_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    ungroup()
+})
+cancer_data = bind_rows(cancer_data_list_hist)
+
+ukb_data_no_cancer = ukb_data_cancer %>% filter(hist_tumor_cat == "No_cancer")
+
+ukb_data_no_cancer %<>% mutate(PTVim_hist_type_1 = NA, PTVim_hist_type_2 = NA, PTVim_hist_type_3 = NA)
+
+columns_to_convert = c("PTVim_hist_type_1", "PTVim_hist_type_2", "PTVim_hist_type_3")
+
+ukb_data_no_cancer = ukb_data_no_cancer %>%
+  mutate(across(all_of(columns_to_convert), as.factor))
+ukb_data_cancer_list_hist = lapply(X = tumors_hist, FUN = function(t){
+  tempdf = ukb_data_cancer %>% filter(hist_tumor_cat == t)
+  tempdf %>% 
+    mutate(PTVim_hist_type_1 = cut(PTVim,
+                            breaks = unique(q_PTVim_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVim_hist_type_2 = cut(PTVim,
+                            breaks = unique(q_PTVim_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVim_hist_type_3 = cut(PTVim,
+                                 breaks = unique(q_PTVim_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    ungroup()
+})
+ukb_data_cancer = rbind(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list_hist))
+
+save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
+```
+
+##PTV spec groups
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_PCA")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_PCA")
+
+cancer_data = cancer_data_PTV_raw
+ukb_data_cancer = ukb_data_cancer_PCA
+
+#PTVim groups
+cancer_data$PTVim_group = cut(cancer_data$PTVim, breaks = c(0, 1, max(cancer_data$PTVim)), include.lowest = T, right = F)
+ukb_data_cancer$PTVim_group = cut(ukb_data_cancer$PTVim, breaks = c(0, 1, max(ukb_data_cancer$PTVim)), include.lowest = T, right = F)
+
+#PTVtsg groups
+cancer_data$PTVtsg_group = cut(cancer_data$PTVtsg, breaks = c(0, 1, max(cancer_data$PTVtsg)), include.lowest = T, right = F)
+ukb_data_cancer$PTVtsg_group = cut(ukb_data_cancer$PTVtsg, breaks = c(0, 1, max(ukb_data_cancer$PTVtsg)), include.lowest = T, right = F)
+
+#PTVpli groups
+cancer_data$PTVpli_group = cut(cancer_data$PTVpli, breaks = c(0, 1, max(cancer_data$PTVpli)), include.lowest = T, right = F)
+ukb_data_cancer$PTVpli_group = cut(ukb_data_cancer$PTVpli, breaks = c(0, 1, max(ukb_data_cancer$PTVpli)), include.lowest = T, right = F)
+
+save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
+
+```
+
+
+##PTVtsg
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
+
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+#Uiversal
+q_tsg_all = ukb_data_cancer %>% 
+  select(eid, PTVtsg) %>% 
+  filter(PTVtsg > 0) %>% 
+  unique() %>% 
+  pull(PTVtsg) %>% 
+  quantile(probs = seq(0, 1, 0.05), na.rm = T) 
+q_tsg_all[c("30%", "40%")]
+
+#Add to ukb
+ukb_data_cancer = ukb_data_cancer %>%
+  mutate(PTVtsg_universal_1 = cut(PTVtsg, breaks = q_tsg_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVtsg_universal_2 = cut(PTVtsg, breaks = q_tsg_all[c("0%", "20%", "80%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVtsg_universal_3 = cut(PTVtsg, breaks = q_tsg_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
+
+cancer_data = cancer_data %>%
+  mutate(PTVtsg_universal_1 = cut(PTVtsg, breaks = q_tsg_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVtsg_universal_2 = cut(PTVtsg, breaks = q_tsg_all[c("0%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVtsg_universal_3 = cut(PTVtsg, breaks = q_tsg_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
+
+#Tumor specific by cancer type
+q_PTvtsg_tumor_spec = lapply(X = tumors, FUN = function(x){
+  ukb_data_cancer %>% 
+    filter(cancer_type == x) %>% 
+    select(eid, PTVtsg) %>% 
+    #filter(PTVtsg > 0) %>% 
+    unique() %>% 
+    pull(PTVtsg) %>% 
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
+})
+names(q_PTvtsg_tumor_spec) = tumors
+q_PTvtsg_tumor_spec[["Pancreas"]][c("5%", "95%")]
+#Add to ukb
+
+cancer_data_list = lapply(X = tumors, FUN = function(t){
+  tempdf = cancer_data %>% filter(cancer_type == t)
+  tempdf %>% 
+    mutate(PTVtsg_cancer_type_1 = cut(PTVtsg,
+                            breaks = unique(q_PTvtsg_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVtsg_cancer_type_2 = cut(PTVtsg,
+                            breaks = unique(q_PTvtsg_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    mutate(PTVtsg_cancer_type_3 = cut(PTVtsg,
+                            breaks = unique(q_PTvtsg_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    ungroup()
+})
+
+cancer_data = bind_rows(cancer_data_list)
+
+ukb_data_no_cancer = ukb_data_cancer %>% filter(cancer_type == "No_cancer")
+
+ukb_data_no_cancer %<>% mutate(PTVtsg_cancer_type_1 = NA, PTVtsg_cancer_type_2 = NA, PTVtsg_cancer_type_3 = NA)
+
+columns_to_convert = c("PTVtsg_cancer_type_1", "PTVtsg_cancer_type_2", "PTVtsg_cancer_type_3")
+
+ukb_data_no_cancer = ukb_data_no_cancer %>%
+  mutate(across(all_of(columns_to_convert), as.factor))
+ 
+ukb_data_cancer_list = lapply(X = tumors, FUN = function(t){
+  tempdf = ukb_data_cancer %>% filter(cancer_type == t)
+  tempdf %>% 
+    mutate(PTVtsg_cancer_type_1 = cut(PTVtsg,
+                            breaks = unique(q_PTvtsg_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVtsg_cancer_type_2 = cut(PTVtsg,
+                            breaks = unique(q_PTvtsg_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVtsg_cancer_type_3 = cut(PTVtsg,
+                            breaks = unique(q_PTvtsg_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    ungroup()
+})
+ukb_data_cancer = bind_rows(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list))
+
+#Tumor specific by histology group
+
+tumors_hist = unique(ukb_data_cancer$hist_tumor_cat)
+tumors_hist = tumors_hist[tumors_hist != "No_cancer"]
+q_PTVtsg_tumor_spec_hist = lapply(X = tumors_hist, FUN = function(x){
+  ukb_data_cancer %>% 
+    filter(hist_tumor_cat == x) %>% 
+    select(eid, PTVtsg) %>% 
+    unique() %>% 
+    pull(PTVtsg) %>% 
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
+})
+names(q_PTVtsg_tumor_spec_hist) = tumors_hist
+q_PTVtsg_tumor_spec_hist[["carcinoma"]][c("10%", "20%")]
+#Add to ukb
+cancer_data_list_hist = lapply(X = tumors_hist, FUN = function(t){
+  tempdf = cancer_data %>% filter(hist_tumor_cat == t)
+  tempdf %>% 
+    mutate(PTVtsg_hist_type_1 = cut(PTVtsg,
+                                 breaks = unique(q_PTVtsg_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
+                                 include.lowest = TRUE)) %>% 
+    mutate(PTVtsg_hist_type_2 = cut(PTVtsg,
+                                 breaks = unique(q_PTVtsg_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]), include.lowest = TRUE)) %>% 
+    mutate(PTVtsg_hist_type_3 = cut(PTVtsg,
+                                 breaks = unique(q_PTVtsg_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    ungroup()
+})
+cancer_data = bind_rows(cancer_data_list_hist)
+
+ukb_data_no_cancer = ukb_data_cancer %>% filter(hist_tumor_cat == "No_cancer")
+
+ukb_data_no_cancer %<>% mutate(PTVtsg_hist_type_1 = NA, PTVtsg_hist_type_2 = NA, PTVtsg_hist_type_3 = NA)
+
+columns_to_convert = c("PTVtsg_hist_type_1", "PTVtsg_hist_type_2", "PTVtsg_hist_type_3")
+
+ukb_data_no_cancer = ukb_data_no_cancer %>%
+  mutate(across(all_of(columns_to_convert), as.factor))
+ukb_data_cancer_list_hist = lapply(X = tumors_hist, FUN = function(t){
+  tempdf = ukb_data_cancer %>% filter(hist_tumor_cat == t)
+  tempdf %>% 
+    mutate(PTVtsg_hist_type_1 = cut(PTVtsg,
+                            breaks = unique(q_PTVtsg_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVtsg_hist_type_2 = cut(PTVtsg,
+                            breaks = unique(q_PTVtsg_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVtsg_hist_type_3 = cut(PTVtsg,
+                                 breaks = unique(q_PTVtsg_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    ungroup()
+})
+ukb_data_cancer = rbind(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list_hist))
+
+save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
+
+```
+
+
+##PLI
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
+
+tumors = unique(ukb_data_cancer$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+
+#Uiversal
+q_pli_all = ukb_data_cancer %>% 
+  select(eid, PTVpli) %>% 
+  filter(PTVpli > 0) %>% 
+  unique() %>% 
+  pull(PTVpli) %>% 
+  quantile(probs = seq(0, 1, 0.05), na.rm = T) 
+q_pli_all[c("30%", "40%")]
+
+#Add to ukb
+ukb_data_cancer = ukb_data_cancer %>%
+  mutate(PTVpli_universal_1 = cut(PTVpli, breaks = q_pli_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVpli_universal_2 = cut(PTVpli, breaks = q_pli_all[c("0%", "20%", "80%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVpli_universal_3 = cut(PTVpli, breaks = q_pli_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
+
+cancer_data = cancer_data %>%
+  mutate(PTVpli_universal_1 = cut(PTVpli, breaks = q_pli_all[c("0%","10%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVpli_universal_2 = cut(PTVpli, breaks = q_pli_all[c("0%", "20%", "80%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTVpli_universal_3 = cut(PTVpli, breaks = q_pli_all[c("0%", "5%", "95%", "100%")], include.lowest = T))
+
+#Tumor specific by cancer type
+q_PTvpli_tumor_spec = lapply(X = tumors, FUN = function(x){
+  ukb_data_cancer %>% 
+    filter(cancer_type == x) %>% 
+    select(eid, PTVpli) %>% 
+    #filter(PTVpli > 0) %>% 
+    unique() %>% 
+    pull(PTVpli) %>% 
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
+})
+names(q_PTvpli_tumor_spec) = tumors
+q_PTvpli_tumor_spec[["Pancreas"]][c("5%", "95%")]
+#Add to ukb
+
+cancer_data_list = lapply(X = tumors, FUN = function(t){
+  tempdf = cancer_data %>% filter(cancer_type == t)
+  tempdf %>% 
+    mutate(PTVpli_cancer_type_1 = cut(PTVpli,
+                            breaks = unique(q_PTvpli_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVpli_cancer_type_2 = cut(PTVpli,
+                            breaks = unique(q_PTvpli_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    mutate(PTVpli_cancer_type_3 = cut(PTVpli,
+                            breaks = unique(q_PTvpli_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    ungroup()
+})
+
+cancer_data = bind_rows(cancer_data_list)
+
+ukb_data_no_cancer = ukb_data_cancer %>% filter(cancer_type == "No_cancer")
+
+ukb_data_no_cancer %<>% mutate(PTVpli_cancer_type_1 = NA, PTVpli_cancer_type_2 = NA, PTVpli_cancer_type_3 = NA)
+
+columns_to_convert = c("PTVpli_cancer_type_1", "PTVpli_cancer_type_2", "PTVpli_cancer_type_3")
+
+ukb_data_no_cancer = ukb_data_no_cancer %>%
+  mutate(across(all_of(columns_to_convert), as.factor))
+ 
+ukb_data_cancer_list = lapply(X = tumors, FUN = function(t){
+  tempdf = ukb_data_cancer %>% filter(cancer_type == t)
+  tempdf %>% 
+    mutate(PTVpli_cancer_type_1 = cut(PTVpli,
+                            breaks = unique(q_PTvpli_tumor_spec[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVpli_cancer_type_2 = cut(PTVpli,
+                            breaks = unique(q_PTvpli_tumor_spec[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVpli_cancer_type_3 = cut(PTVpli,
+                            breaks = unique(q_PTvpli_tumor_spec[[t]][c("0%","5%", "95%", "100%")]),
+                            include.lowest = TRUE)) %>%
+    ungroup()
+})
+ukb_data_cancer = bind_rows(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list))
+
+#Tumor specific by histology group
+
+tumors_hist = unique(ukb_data_cancer$hist_tumor_cat)
+tumors_hist = tumors_hist[tumors_hist != "No_cancer"]
+q_PTVpli_tumor_spec_hist = lapply(X = tumors_hist, FUN = function(x){
+  ukb_data_cancer %>% 
+    filter(hist_tumor_cat == x) %>% 
+    select(eid, PTVpli) %>% 
+    unique() %>% 
+    pull(PTVpli) %>% 
+    quantile(probs = seq(0, 1, 0.05), na.rm = T)
+})
+names(q_PTVpli_tumor_spec_hist) = tumors_hist
+q_PTVpli_tumor_spec_hist[["carcinoma"]][c("10%", "20%")]
+#Add to ukb
+cancer_data_list_hist = lapply(X = tumors_hist, FUN = function(t){
+  tempdf = cancer_data %>% filter(hist_tumor_cat == t)
+  tempdf %>% 
+    mutate(PTVpli_hist_type_1 = cut(PTVpli,
+                                 breaks = unique(q_PTVpli_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
+                                 include.lowest = TRUE)) %>% 
+    mutate(PTVpli_hist_type_2 = cut(PTVpli,
+                                 breaks = unique(q_PTVpli_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]), include.lowest = TRUE)) %>% 
+    mutate(PTVpli_hist_type_3 = cut(PTVpli,
+                                 breaks = unique(q_PTVpli_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    ungroup()
+})
+cancer_data = bind_rows(cancer_data_list_hist)
+
+ukb_data_no_cancer = ukb_data_cancer %>% filter(hist_tumor_cat == "No_cancer")
+
+ukb_data_no_cancer %<>% mutate(PTVpli_hist_type_1 = NA, PTVpli_hist_type_2 = NA, PTVpli_hist_type_3 = NA)
+
+columns_to_convert = c("PTVpli_hist_type_1", "PTVpli_hist_type_2", "PTVpli_hist_type_3")
+
+ukb_data_no_cancer = ukb_data_no_cancer %>%
+  mutate(across(all_of(columns_to_convert), as.factor))
+ukb_data_cancer_list_hist = lapply(X = tumors_hist, FUN = function(t){
+  tempdf = ukb_data_cancer %>% filter(hist_tumor_cat == t)
+  tempdf %>% 
+    mutate(PTVpli_hist_type_1 = cut(PTVpli,
+                            breaks = unique(q_PTVpli_tumor_spec_hist[[t]][c("0%","10%", "90%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVpli_hist_type_2 = cut(PTVpli,
+                            breaks = unique(q_PTVpli_tumor_spec_hist[[t]][c("0%","20%", "60%", "100%")]),
+                            include.lowest = TRUE)) %>% 
+    mutate(PTVpli_hist_type_3 = cut(PTVpli,
+                                 breaks = unique(q_PTVpli_tumor_spec_hist[[t]][c("0%","5%", "95%", "100%")]), include.lowest = TRUE)) %>% 
+    ungroup()
+})
+ukb_data_cancer = rbind(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list_hist))
+
+save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
+```
 
 
 #PTV genes
@@ -889,8 +1443,8 @@ save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_
 
 #Tumor groups
 ```{r}
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final_raw")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_raw")
 ICD_table = read_xlsx("C:/Users/bagil/Desktop/ukb/Section111ValidICD10-Jan2023-DupFixed.xlsx")
 type_of_cancer = read.table("C:/Users/bagil/Desktop/ukb/rawdata/40006.txt", header = T) #40006
 histology = read_xlsx("C:/Users/bagil/Desktop/ukb/sitetype.icdo3.d20220429.xlsx")
@@ -930,9 +1484,11 @@ ICD_mapping_fin$tumor_cat[is.na(ICD_mapping_fin$tumor_cat)] = "other"
   #slice(1) %>% 
   #ungroup()
 
-cancer_data$tumor_cat = ICD_mapping_fin$tumor_cat[fmatch(cancer_data$eid, ICD_mapping_fin$eid)]
-ukb_data_cancer$tumor_cat = ICD_mapping_fin$tumor_cat[fmatch(ukb_data_cancer$eid, ICD_mapping_fin$eid, nomatch = NA)]
-ukb_data_cancer$tumor_cat[is.na(ukb_data_cancer$tumor_cat)] = "No_cancer"
+cancer_data_raw$tumor_cat = ICD_mapping_fin$tumor_cat[fmatch(cancer_data_raw$eid, ICD_mapping_fin$eid)]
+cancer_data_raw$tumor_cat[is.na(cancer_data_raw$tumor_cat)] = "undef"
+
+ukb_data_cancer_raw$tumor_cat = cancer_data_raw$tumor_cat[fmatch(ukb_data_cancer_raw$eid, cancer_data_raw$eid, nomatch = NA)]
+ukb_data_cancer_raw$tumor_cat[is.na(ukb_data_cancer_raw$tumor_cat)] = "No_cancer"
 
 #Histology
 histology$tumor_cat = sapply(histology$`Histology/Behavior Description`, categorize_cancer)
@@ -949,14 +1505,22 @@ hist_tumor_cat_fin$tumor_cat[is.na(hist_tumor_cat_fin$tumor_cat)] = "other"
 rm(histology, histology_map_tumor_cat, histology_of_cancer)
 
 #Tumor categories by histology
-cancer_data$hist_tumor_cat = hist_tumor_cat_fin$tumor_cat[fmatch(cancer_data$eid, hist_tumor_cat_fin$eid)]
-ukb_data_cancer$hist_tumor_cat = hist_tumor_cat_fin$tumor_cat[fmatch(ukb_data_cancer$eid, hist_tumor_cat_fin$eid)]
-ukb_data_cancer$hist_tumor_cat[is.na(ukb_data_cancer$hist_tumor_cat)] = "No_cancer"
+cancer_data_raw$hist_tumor_cat = hist_tumor_cat_fin$tumor_cat[fmatch(cancer_data_raw$eid, hist_tumor_cat_fin$eid)]
+cancer_data_raw$hist_tumor_cat[is.na(cancer_data_raw$hist_tumor_cat)] = "undef"
 
-cancer_data$tumor_cat = NULL
-ukb_data_cancer$tumor_cat = NULL
-save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
-save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
+ukb_data_cancer_raw$hist_tumor_cat = cancer_data_raw$hist_tumor_cat[fmatch(ukb_data_cancer_raw$eid, cancer_data_raw$eid)]
+ukb_data_cancer_raw$hist_tumor_cat[is.na(ukb_data_cancer_raw$hist_tumor_cat)] = "No_cancer"
+
+cancer_data_raw$tumor_cat = NULL
+ukb_data_cancer_raw$tumor_cat = NULL
+save(cancer_data_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final_raw")
+save(ukb_data_cancer_raw, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_raw")
+
+
+
+```
+
+```{r}
 
 
 

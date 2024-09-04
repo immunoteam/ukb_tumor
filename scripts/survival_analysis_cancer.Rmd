@@ -360,7 +360,7 @@ save(cancer_new_PTV_surv_g3_df, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/o
 cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
 tumors = unique(cancer_data$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
-
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
 i = 0
 PTV_tumor_surv_forest_plot = lapply(X = tumors, FUN = function(x){
@@ -399,7 +399,7 @@ PTV_tumor_surv_forest_plot = lapply(X = tumors, FUN = function(x){
   ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x), refLabel = "reference", noDigits = 2)
 })
 
-PTV_surv_cox_forest = ggarrange(plotlist = PTV_tumor_surv_forest_plot, ncol = 9, nrow = 3)
+PTV_surv_cox_forest = ggarrange(plotlist = PTV_tumor_surv_forest_plot, ncol = 6, nrow = 5)
 ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/ptv_forest_surv.png", plot = PTV_surv_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
 
 
@@ -451,14 +451,67 @@ PTV_tumor_surv_forest_plot = lapply(X = hist_cat, FUN = function(x){
 })
 
 PTV_surv_cox_forest = ggarrange(plotlist = PTV_tumor_surv_forest_plot, ncol = 3, nrow = 2)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/hist_ptv_forest_surv.png", plot = PTV_surv_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/hist_ptv_forest_surv.png", plot = PTV_surv_cox_forest, width = 70, height = 60, units = "cm", limitsize = F, dpi = 300)
 
 ```
+
+#Forest plot PTVim
+```{r}
+
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+
+i = 0
+PTVim_tumor_surv_forest_plot = lapply(X = tumors, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can %<>% add_count(sex, name = "n_sex") %>% filter(n_sex >= 5)
+  temp_can$sex = factor(temp_can$sex)
+  l = temp_can %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(temp_can)/25) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  temp_can$ethnic_group = factor(temp_can$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+  temp_can %<>% 
+    select(sex, ethnic_group, PTVim, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, time_in_days,event_indicator) %>% 
+    na.omit()
+  if (length(l) == 1 & length(unique(temp_can$sex)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) == 1 & length(unique(temp_can$sex)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) > 1 & length(unique(temp_can$sex)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else {
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + sex + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  }
+  ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x), refLabel = "reference")
+})
+
+PTV_surv_cox_forest = ggarrange(plotlist = PTVim_tumor_surv_forest_plot, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/ptvim_forest_surv.png", plot = PTV_surv_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
+
+```
+
+
 
 #PTV survival
 ##Universal 1
 ```{r}
 
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
 cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
 hist_cat = unique(cancer_data$hist_tumor_cat)
 hist_cat = hist_cat[hist_cat != "No_cancer"]
@@ -466,6 +519,10 @@ hist_cat = hist_cat[hist_cat != "No_cancer"]
 cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
   temp_can = subset(cancer_data, hist_tumor_cat == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTV_universal_1 = as.character(temp_can$PTV_universal_1)
+  l = sort(unique(temp_can$PTV_universal_1))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTV_universal_1 = cut(temp_can$PTV_burden, breaks = cp, include.lowest = T, right = T)
   temp_can %<>% 
   mutate(time_in_days = case_when(
       death == T ~ date_of_death - diag_date,
@@ -474,29 +531,38 @@ cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
   temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   #temp_can$PTV_universal_1 = factor(temp_can$PTV_universal_1, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+  fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = subset(temp_can, gender == "female")))
+  args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, "(Female)\n(N=", nrow(subset(temp_can, gender == "female")), ")"), pval = T, legend = "none")
+  pfit_f = do.call(ggsurvplot, args_f)
+  tbl_f = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data =  subset(temp_can, gender == "female")), risk.table = T)$table
+  fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = subset(temp_can, gender == "male")))
+  args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, "(Male)\n(N=", subset(temp_can, gender == "male"), ")"), pval = T, legend = "none")
+  pfit_m = do.call(ggsurvplot, args_m)
+  tbl_m = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data =  subset(temp_can, gender == "male")), risk.table = T)$table
+  grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
   })
 
 
 ggarrange(plotlist =  cancer_surv_PTV1, ncol = 3, nrow = 2)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_universal_1.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_universal_1.png", width = 120, height = 60, units = "cm", dpi = 300)
 
 ```
 
 ##Universal 2
 ```{r}
 
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
 cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
 hist_cat = unique(cancer_data$hist_tumor_cat)
 hist_cat = hist_cat[hist_cat != "No_cancer"]
 
-cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
+cancer_surv_PTV2 = lapply(X = hist_cat, FUN = function(x){
   temp_can = subset(cancer_data, hist_tumor_cat == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTV_universal_2 = as.character(temp_can$PTV_universal_2)
+  l = sort(unique(temp_can$PTV_universal_2))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTV_universal_2 = cut(temp_can$PTV_burden, breaks = cp, include.lowest = T, right = T)
   temp_can %<>% 
   mutate(time_in_days = case_when(
       death == T ~ date_of_death - diag_date,
@@ -505,28 +571,73 @@ cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
   temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   #temp_can$PTV_universal_2 = factor(temp_can$PTV_universal_2, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+  fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = subset(temp_can, gender == "female")))
+  args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, "(Female)\n(N=", nrow(subset(temp_can, gender == "female")), ")"), pval = T, legend = "none")
+  pfit_f = do.call(ggsurvplot, args_f)
+  tbl_f = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data =  subset(temp_can, gender == "female")), risk.table = T)$table
+  fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = subset(temp_can, gender == "male")))
+  args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, "(Male)\n(N=", nrow(subset(temp_can, gender == "male")), ")"), pval = T, legend = "none")
+  pfit_m = do.call(ggsurvplot, args_m)
+  tbl_m = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data =  subset(temp_can, gender == "male")), risk.table = T)$table
+  grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
   })
 
 
-ggarrange(plotlist =  cancer_surv_PTV1, ncol = 3, nrow = 2)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_universal_2.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  cancer_surv_PTV2, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_universal_2.png", width = 120, height = 60, units = "cm", dpi = 300)
 
 
 ```
 
-##Hist type 1
+##Universal 3
 ```{r}
 
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
 cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
 hist_cat = unique(cancer_data$hist_tumor_cat)
 hist_cat = hist_cat[hist_cat != "No_cancer"]
 
-cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
+cancer_surv_PTV3 = lapply(X = hist_cat, FUN = function(x){
+  temp_can = subset(cancer_data, hist_tumor_cat == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTV_universal_3 = as.character(temp_can$PTV_universal_3)
+  l = sort(unique(temp_can$PTV_universal_3))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTV_universal_3 = cut(temp_can$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTV_universal_3 = factor(temp_can$PTV_universal_3, ordered = T)
+  fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data = subset(temp_can, gender == "female")))
+  args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, "(Female)\n(N=", nrow(subset(temp_can, gender == "female")), ")"), pval = T, legend = "none")
+  pfit_f = do.call(ggsurvplot, args_f)
+  tbl_f = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data =  subset(temp_can, gender == "female")), risk.table = T)$table
+  fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data = subset(temp_can, gender == "male")))
+  args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, "(Male)\n(N=", nrow(subset(temp_can, gender == "male")), ")"), pval = T, legend = "none")
+  pfit_m = do.call(ggsurvplot, args_m)
+  tbl_m = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data =  subset(temp_can, gender == "male")), risk.table = T)$table
+  grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  })
+
+
+ggarrange(plotlist =  cancer_surv_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_universal_3.png", width = 120, height = 60, units = "cm", dpi = 300)
+
+```
+
+##Hist type 1 PTV
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(cancer_data$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+cancer_hist_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
   temp_can = subset(cancer_data, hist_tumor_cat == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
   temp_can$PTV_hist_type_1 = as.character(temp_can$PTV_hist_type_1)
@@ -541,27 +652,31 @@ cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
   temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   #temp_can$PTV_hist_type_1 = factor(temp_can$PTV_hist_type_1, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+ fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data = subset(temp_can, gender == "female")))
+  args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, "(Female)\n(N=", nrow(subset(temp_can, gender == "female")), ")"), pval = T, legend = "none")
+  pfit_f = do.call(ggsurvplot, args_f)
+  tbl_f = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data =  subset(temp_can, gender == "female")), risk.table = T)$table
+  fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data = subset(temp_can, gender == "male")))
+  args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, "(Male)\n(N=", nrow(subset(temp_can, gender == "male")), ")"), pval = T, legend = "none")
+  pfit_m = do.call(ggsurvplot, args_m)
+  tbl_m = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_1, data =  subset(temp_can, gender == "male")), risk.table = T)$table
+  grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
   })
 
 
-ggarrange(plotlist =  cancer_surv_PTV1, ncol = 3, nrow = 2)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_tumor_cat_1.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  cancer_hist_surv_PTV1, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_tumor_cat_1.png", width = 120, height = 60, units = "cm", dpi = 300)
 
 
 ```
 
-##Hist type 2
+##Hist type 2 PTV
 ```{r}
 cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
 hist_cat = unique(cancer_data$hist_tumor_cat)
 hist_cat = hist_cat[hist_cat != "No_cancer"]
 
-cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
+cancer_hist_surv_PTV2 = lapply(X = hist_cat, FUN = function(x){
   temp_can = subset(cancer_data, hist_tumor_cat == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
   temp_can$PTV_hist_type_2 = as.character(temp_can$PTV_hist_type_2)
@@ -576,27 +691,31 @@ cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
   temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   #temp_can$PTV_hist_type_2 = factor(temp_can$PTV_hist_type_2, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+ fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data = subset(temp_can, gender == "female")))
+  args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, "(Female)\n(N=", nrow(subset(temp_can, gender == "female")), ")"), pval = T, legend = "none")
+  pfit_f = do.call(ggsurvplot, args_f)
+  tbl_f = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data =  subset(temp_can, gender == "female")), risk.table = T)$table
+  fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data = subset(temp_can, gender == "male")))
+  args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, "(Male)\n(N=", nrow(subset(temp_can, gender == "male")), ")"), pval = T, legend = "none")
+  pfit_m = do.call(ggsurvplot, args_m)
+  tbl_m = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_2, data =  subset(temp_can, gender == "male")), risk.table = T)$table
+  grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
   })
 
 
-ggarrange(plotlist =  cancer_surv_PTV1, ncol = 3, nrow = 2)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_tumor_cat_2.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  cancer_hist_surv_PTV2, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_tumor_cat_2.png", width = 120, height = 60, units = "cm", dpi = 300)
 
 
 ```
 
-##Hist type 3
+##Hist type 3 PTV
 ```{r}
 cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
 hist_cat = unique(cancer_data$hist_tumor_cat)
 hist_cat = hist_cat[hist_cat != "No_cancer"]
 
-cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
+cancer_hist_surv_PTV3 = lapply(X = hist_cat, FUN = function(x){
   temp_can = subset(cancer_data, hist_tumor_cat == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
   temp_can$PTV_hist_type_3 = as.character(temp_can$PTV_hist_type_3)
@@ -611,27 +730,203 @@ cancer_surv_PTV1 = lapply(X = hist_cat, FUN = function(x){
   temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
   #temp_can$PTV_hist_type_3 = factor(temp_can$PTV_hist_type_3, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+ fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data = subset(temp_can, gender == "female")))
+  args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, "(Female)\n(N=", nrow(subset(temp_can, gender == "female")), ")"), pval = T, legend = "none")
+  pfit_f = do.call(ggsurvplot, args_f)
+  tbl_f = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data =  subset(temp_can, gender == "female")), risk.table = T)$table
+  fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data = subset(temp_can, gender == "male")))
+  args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, "(Male)\n(N=", nrow(subset(temp_can, gender == "male")), ")"), pval = T, legend = "none")
+  pfit_m = do.call(ggsurvplot, args_m)
+  tbl_m = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_hist_type_3, data =  subset(temp_can, gender == "male")), risk.table = T)$table
+  grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
   })
 
 
-ggarrange(plotlist =  cancer_surv_PTV1, ncol = 3, nrow = 2)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_tumor_cat_3.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  cancer_hist_surv_PTV3, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/hist_type_PTV_tumor_cat_3.png", width = 120, height = 60, units = "cm", dpi = 300)
 
 ```
 
-##Cancer type 1
+##Cancer universal 1
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+
+cancer_surv_PTV1 = lapply(X = tumors, FUN = function(x){
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTV_universal_1 = as.character(temp_can$PTV_universal_1)
+  l = sort(unique(temp_can$PTV_universal_1))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTV_universal_1 = cut(temp_can$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTV_universal_1 = factor(temp_can$PTV_universal_1, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_1, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+    message("Not enough data for either gender.")}
+})
+
+
+ggarrange(plotlist =  cancer_surv_PTV1, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_universal_PTV_1.png", width = 140, height = 60, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Cancer universal 2
 ```{r}
 
 cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
 tumors = unique(cancer_data$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
-cancer_surv_PTV1 = lapply(X = tumors, FUN = function(x){
+cancer_surv_PTV2 = lapply(X = tumors, FUN = function(x){
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTV_universal_2 = as.character(temp_can$PTV_universal_2)
+  l = sort(unique(temp_can$PTV_universal_2))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTV_universal_2 = cut(temp_can$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTV_universal_2 = factor(temp_can$PTV_universal_2, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_2, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+    message("Not enough data for either gender.")}
+})
+
+
+ggarrange(plotlist =  cancer_surv_PTV2, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_universal_PTV_2.png", width = 140, height = 60, units = "cm", dpi = 300, limitsize = F)
+
+
+```
+
+##Universal 3
+```{r}
+
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+
+cancer_surv_PTV3 = lapply(X = tumors, FUN = function(x){
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTV_universal_3 = as.character(temp_can$PTV_universal_3)
+  l = sort(unique(temp_can$PTV_universal_3))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTV_universal_3 = cut(temp_can$PTV_burden, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTV_universal_3 = factor(temp_can$PTV_universal_3, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_universal_3, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+    message("Not enough data for either gender.")}
+})
+
+
+ggarrange(plotlist =  cancer_surv_PTV3, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_universal_PTV_3.png", width = 140, height = 60, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+
+##Cancer type 1 PTV
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+
+cancer_type_surv_PTV1 = lapply(X = tumors, FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
   temp_can$PTV_cancer_type_1 = as.character(temp_can$PTV_cancer_type_1)
@@ -645,28 +940,51 @@ cancer_surv_PTV1 = lapply(X = tumors, FUN = function(x){
     ))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
-  #temp_can$PTV_cancer_type_1 = factor(temp_can$PTV_cancer_type_1, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+  #temp_can$PTVim_cancer_type_1 = factor(temp_can$PTVim_cancer_type_1, ordered = T)
+  gender_counts = table(temp_can$gender)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_1, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+    message("Not enough data for either gender.")}
   })
 
 
-ggarrange(plotlist =  cancer_surv_PTV1, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_1_PTV.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  cancer_type_surv_PTV1, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_1_PTV.png", width = 140, height = 60, units = "cm", dpi = 300, limitsize = F)
 
 ```
 
-##Cancer type 2
+##Cancer type 2 PTV
 ```{r}
 
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
 cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
 tumors = unique(cancer_data$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
-cancer_surv_PTV1 = lapply(X = tumors, FUN = function(x){
+cancer_type_surv_PTV2 = lapply(X = tumors, FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
   temp_can$PTV_cancer_type_2 = as.character(temp_can$PTV_cancer_type_2)
@@ -680,28 +998,50 @@ cancer_surv_PTV1 = lapply(X = tumors, FUN = function(x){
     ))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
-  #temp_can$PTV_cancer_type_2 = factor(temp_can$PTV_cancer_type_2, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+  #temp_can$PTVim_cancer_type_1 = factor(temp_can$PTVim_cancer_type_1, ordered = T)
+  gender_counts = table(temp_can$gender)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_2, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+    message("Not enough data for either gender.")}
   })
 
 
-ggarrange(plotlist =  cancer_surv_PTV1, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_2_PTV.png.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  cancer_type_surv_PTV2, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_2_PTV.png", width = 140, height = 60, units = "cm", dpi = 300, limitsize = F)
 
 ```
 
-##Cancer type 3
+##Cancer type 3 PTV
 ```{r}
 
 cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
 tumors = unique(cancer_data$cancer_type)
 tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
 
-cancer_surv_PTV1 = lapply(X = tumors, FUN = function(x){
+cancer_type_surv_PTV3 = lapply(X = tumors, FUN = function(x){
   temp_can = subset(cancer_data, cancer_type == x)
   temp_can = temp_can[!duplicated(temp_can$eid), ]
   temp_can$PTV_cancer_type_3 = as.character(temp_can$PTV_cancer_type_3)
@@ -715,17 +1055,687 @@ cancer_surv_PTV1 = lapply(X = tumors, FUN = function(x){
     ))
   temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
   temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
-  #temp_can$PTV_cancer_type_3 = factor(temp_can$PTV_cancer_type_3, ordered = T)
-  fit = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = temp_can))
-  args = list(fit = fit, title = paste0("Survival Analysis for ", x, "\n(N=", nrow(temp_can), ")"), pval = T, legend = "none")
-  pfit = do.call(ggsurvplot, args)
-  tblA = ggsurvplot(survfit(Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = temp_can), risk.table = T, tables.theme = clean_theme())$table
-  grid.arrange(pfit$plot, tblA, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2)))
+  #temp_can$PTVim_cancer_type_1 = factor(temp_can$PTVim_cancer_type_1, ordered = T)
+  gender_counts = table(temp_can$gender)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTV_cancer_type_3, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+    message("Not enough data for either gender.")}
   })
 
 
-ggarrange(plotlist =  cancer_surv_PTV1, ncol = 5, nrow = 5)
-ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_3_PTV.png.png", width = 100, height = 50, units = "cm", dpi = 300)
+ggarrange(plotlist =  cancer_type_surv_PTV3, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/cancer_type_3_PTV.png", width = 140, height = 60, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+#PTVim surv analysis
+##Hist type
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(cancer_data$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+hist_type_ptvim = lapply(X = hist_cat, FUN = function(x){
+  temp_can = subset(cancer_data, hist_tumor_cat == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTVim_group = as.character(temp_can$PTVim_group)
+  l = sort(unique(temp_can$PTVim_group))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTVim_group = cut(temp_can$PTVim, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTVim_group = factor(temp_can$PTVim_group, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group + gender, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group + gender, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){ 
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+  message("Not enough data for either gender.")}
+  })
+
+
+ggarrange(plotlist =  hist_type_ptvim, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/ptvim_hist_cat_survplot.png", width = 100, height = 50, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Cancer type
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+i = 0 
+
+cancer_type_ptvim = lapply(X = tumors, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTVim_group = as.character(temp_can$PTVim_group)
+  l = sort(unique(temp_can$PTVim_group))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTVim_group = cut(temp_can$PTVim, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTVim_group = factor(temp_can$PTVim_group, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group + gender, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group + gender, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVim_group, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+  message("Not enough data for either gender.")}
+})
+
+
+ggarrange(plotlist =  cancer_type_ptvim, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/ptvim_cancer_cat_survplot.png", width = 100, height = 50, units = "cm", dpi = 300)
+
+```
+
+##PTVim forest plot hist 
+```{r}
+
+cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(cancer_data$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+i = 0
+PTVim_forest_surv = lapply(X = hist_cat, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, hist_tumor_cat == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can %<>% add_count(gender, name = "n_gender") %>% filter(n_gender >= 5)
+  temp_can$gender = factor(temp_can$gender)
+  l = temp_can %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(temp_can)/25) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  temp_can$ethnic_group = factor(temp_can$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+  temp_can %<>% 
+    select(gender, ethnic_group, PTVim, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, time_in_days,event_indicator) %>% 
+    na.omit()
+  if (length(l) == 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) == 1 & length(unique(temp_can$gender)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + gender + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) > 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else {
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + gender + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  }
+  ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x, "(PTVim)"), refLabel = "reference", noDigits = 2)
+})
+
+PTVim_surv_cox_forest = ggarrange(plotlist = PTVim_forest_surv, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTVim_forest_surv_hist.png", plot = PTVim_surv_cox_forest, width = 70, height = 60, units = "cm", limitsize = F, dpi = 300)
+
+```
+
+
+##PTVim forest plot cancer cat
+```{r}
+
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+
+i = 0
+PTVim_tumor_surv_forest_plot = lapply(X = tumors, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can %<>% add_count(gender, name = "n_gender") %>% filter(n_gender >= 5)
+  temp_can$gender = factor(temp_can$gender)
+  l = temp_can %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(temp_can)/25) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  temp_can$ethnic_group = factor(temp_can$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+  temp_can %<>% 
+    select(gender, ethnic_group, PTVim, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, time_in_days,event_indicator) %>% 
+    na.omit()
+  if (length(l) == 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) == 1 & length(unique(temp_can$gender)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + gender + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) > 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else {
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVim + gender + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  }
+  ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x, "(PTVim)"), refLabel = "reference")
+})
+
+PTVim_surv_cox_forest = ggarrange(plotlist = PTVim_tumor_surv_forest_plot, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/ptvim_forest_surv.png", plot = PTVim_surv_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
+
+
+```
+
+#PTVtsg surv analysis
+##Hist type
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(cancer_data$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+hist_type_PTVtsg = lapply(X = hist_cat, FUN = function(x){
+  temp_can = subset(cancer_data, hist_tumor_cat == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTVtsg_group = as.character(temp_can$PTVtsg_group)
+  l = sort(unique(temp_can$PTVtsg_group))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTVtsg_group = cut(temp_can$PTVtsg, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTVtsg_group = factor(temp_can$PTVtsg_group, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group + gender, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group + gender, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){ 
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+  message("Not enough data for either gender.")}
+  })
+
+
+ggarrange(plotlist =  hist_type_PTVtsg, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/PTVtsg_hist_cat_survplot.png", width = 100, height = 50, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Cancer type
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+i = 0 
+
+cancer_type_PTVtsg = lapply(X = tumors, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTVtsg_group = as.character(temp_can$PTVtsg_group)
+  l = sort(unique(temp_can$PTVtsg_group))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTVtsg_group = cut(temp_can$PTVtsg, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTVtsg_group = factor(temp_can$PTVtsg_group, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group + gender, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group + gender, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVtsg_group, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+  message("Not enough data for either gender.")}
+})
+
+
+ggarrange(plotlist =  cancer_type_PTVtsg, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/PTVtsg_cancer_cat_survplot.png", width = 100, height = 50, units = "cm", dpi = 300)
+
+```
+
+##Forest plot hist
+```{r}
+cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(cancer_data$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+i = 0
+PTVtsg_forest_surv = lapply(X = hist_cat, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, hist_tumor_cat == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can %<>% add_count(gender, name = "n_gender") %>% filter(n_gender >= 5)
+  temp_can$gender = factor(temp_can$gender)
+  l = temp_can %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(temp_can)/25) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  temp_can$ethnic_group = factor(temp_can$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+  temp_can %<>% 
+    select(gender, ethnic_group, PTVtsg, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, time_in_days,event_indicator) %>% 
+    na.omit()
+  if (length(l) == 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) == 1 & length(unique(temp_can$gender)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + gender + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) > 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else {
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + gender + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  }
+  ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x, "(PTVtsg)"), refLabel = "reference", noDigits = 2)
+})
+
+PTVtsg_surv_cox_forest = ggarrange(plotlist = PTVtsg_forest_surv, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTVtsg_forest_surv_hist.png", plot = PTVtsg_surv_cox_forest, width = 70, height = 60, units = "cm", limitsize = F, dpi = 300)
+
+```
+
+##Forest plot cancer
+```{r}
+
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+
+i = 0
+PTVtsg_tumor_surv_forest_plot = lapply(X = tumors, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can %<>% add_count(gender, name = "n_gender") %>% filter(n_gender >= 5)
+  temp_can$gender = factor(temp_can$gender)
+  l = temp_can %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(temp_can)/25) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  temp_can$ethnic_group = factor(temp_can$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+  temp_can %<>% 
+    select(gender, ethnic_group, PTVtsg, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, time_in_days,event_indicator) %>% 
+    na.omit()
+  if (length(l) == 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) == 1 & length(unique(temp_can$gender)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + gender + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) > 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else {
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVtsg + gender + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  }
+  ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x, "(PTVtsg)"), refLabel = "reference")
+})
+
+PTVtsg_surv_cox_forest = ggarrange(plotlist = PTVtsg_tumor_surv_forest_plot, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTVtsg_forest_surv.png", plot = PTVtsg_surv_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
+
+```
+
+#PTVpli surv analysis
+##Hist type
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(cancer_data$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+hist_type_PTVpli = lapply(X = hist_cat, FUN = function(x){
+  temp_can = subset(cancer_data, hist_tumor_cat == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTVpli_group = as.character(temp_can$PTVpli_group)
+  l = sort(unique(temp_can$PTVpli_group))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTVpli_group = cut(temp_can$PTVpli, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTVpli_group = factor(temp_can$PTVpli_group, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group + gender, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group + gender, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){ 
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+  message("Not enough data for either gender.")}
+  })
+
+
+ggarrange(plotlist =  hist_type_PTVpli, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/PTVpli_hist_cat_survplot.png", width = 100, height = 50, units = "cm", dpi = 300, limitsize = F)
+
+```
+
+##Cancer type
+```{r}
+
+cancer_data$gender = ifelse(cancer_data$sex == 0, "female", "male")
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+i = 0 
+
+cancer_type_PTVpli = lapply(X = tumors, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can$PTVpli_group = as.character(temp_can$PTVpli_group)
+  l = sort(unique(temp_can$PTVpli_group))
+  cp = unique(sort(unlist(sapply(X = l, FUN = function(y)  sapply(X = strsplit(y, ",")[[1]], FUN = function(x) as.numeric(str_extract(x, "\\d+")))))))
+  temp_can$PTVpli_group = cut(temp_can$PTVpli, breaks = cp, include.lowest = T, right = T)
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  #temp_can$PTVpli_group = factor(temp_can$PTVpli_group, ordered = T)
+  gender_counts = table(temp_can$gender)
+  if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group + gender, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group + gender, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, pfit_m$plot, tbl_f, tbl_m, layout_matrix = rbind(c(1, 1, 2, 2), c(1,1, 2, 2), c(3, 3, 4, 4)))
+  } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
+    fit_m = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group, data = subset(temp_can, gender == "male")))
+    args_m = list(fit = fit_m, title = paste0("Survival Analysis for ", x, " (Male)\n(N=", sum(temp_can$gender == "male"), ")"), pval = TRUE, legend = "none")
+    pfit_m = do.call(ggsurvplot, args_m)
+    tbl_m = ggsurvplot(fit_m, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_m$plot, tbl_m, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10){
+    fit_f = do.call(survfit, list(formula = Surv(time_in_days, event = event_indicator) ~ PTVpli_group, data = subset(temp_can, gender == "female")))
+    args_f = list(fit = fit_f, title = paste0("Survival Analysis for ", x, " (Female)\n(N=", sum(temp_can$gender == "female"), ")"), pval = TRUE, legend = "none")
+    pfit_f = do.call(ggsurvplot, args_f)
+    tbl_f = ggsurvplot(fit_f, risk.table = TRUE)$table
+    fig = grid.arrange(pfit_f$plot, tbl_f, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2)))
+  } else {
+  message("Not enough data for either gender.")}
+})
+
+
+ggarrange(plotlist =  cancer_type_PTVpli, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTV_cancer_surv/PTVpli_cancer_cat_survplot.png", width = 100, height = 50, units = "cm", dpi = 300)
+
+```
+
+##Forest plot hist
+```{r}
+
+cancer_data$hist_tumor_cat[is.na(cancer_data$hist_tumor_cat)] = "No_cancer"
+hist_cat = unique(cancer_data$hist_tumor_cat)
+hist_cat = hist_cat[hist_cat != "No_cancer"]
+
+i = 0
+PTVpli_forest_surv = lapply(X = hist_cat, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, hist_tumor_cat == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$hist_tumor_cat[is.na(temp_can$hist_tumor_cat)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can %<>% add_count(gender, name = "n_gender") %>% filter(n_gender >= 5)
+  temp_can$gender = factor(temp_can$gender)
+  l = temp_can %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(temp_can)/25) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  temp_can$ethnic_group = factor(temp_can$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+  temp_can %<>% 
+    select(gender, ethnic_group, PTVpli, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, time_in_days,event_indicator) %>% 
+    na.omit()
+  if (length(l) == 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) == 1 & length(unique(temp_can$gender)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + gender + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) > 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else {
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + gender + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  }
+  ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x, "(PTVpli)"), refLabel = "reference", noDigits = 2)
+})
+
+PTVpli_surv_cox_forest = ggarrange(plotlist = PTVpli_forest_surv, ncol = 3, nrow = 2)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTVpli_forest_surv_hist.png", plot = PTVpli_surv_cox_forest, width = 70, height = 60, units = "cm", limitsize = F, dpi = 300)
+
+```
+
+##Forest plot cancer
+```{r}
+
+cancer_data$cancer_type[is.na(cancer_data$cancer_type)] = "No_cancer"
+tumors = unique(cancer_data$cancer_type)
+tumors = tumors[tumors != "No_cancer"]
+tumors = tumors[tumors != "Hydatidiform_mole"]
+
+i = 0
+PTVpli_tumor_surv_forest_plot = lapply(X = tumors, FUN = function(x){
+  i = i + 1
+  .GlobalEnv$i = i
+  temp_can = subset(cancer_data, cancer_type == x)
+  temp_can = temp_can[!duplicated(temp_can$eid), ]
+  temp_can %<>% 
+  mutate(time_in_days = case_when(
+      death == T ~ date_of_death - diag_date,
+      death == F ~ max(date_of_death, na.rm = T) - diag_date
+    ))
+  temp_can$cancer_type[is.na(temp_can$cancer_type)] = "No cancer"
+  temp_can$event_indicator = ifelse(temp_can$death == T, 1, 0)
+  temp_can %<>% add_count(gender, name = "n_gender") %>% filter(n_gender >= 5)
+  temp_can$gender = factor(temp_can$gender)
+  l = temp_can %>% 
+    add_count(ethnic_group, name = "freq") %>% 
+    filter(freq > nrow(temp_can)/25) %>% 
+    arrange(desc(freq)) %>% 
+    pull(ethnic_group) %>% 
+    unique()
+  temp_can$ethnic_group = factor(temp_can$ethnic_group, levels = c("British", sort(setdiff(l, "British"))))
+  temp_can %<>% 
+    select(gender, ethnic_group, PTVpli, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, time_in_days,event_indicator) %>% 
+    na.omit()
+  if (length(l) == 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) == 1 & length(unique(temp_can$gender)) == 2){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + gender + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else if(length(l) > 1 & length(unique(temp_can$gender)) == 1){
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  } else {
+    hr_model = coxph(Surv(time_in_days, event_indicator) ~ PTVpli + gender + ethnic_group + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = temp_can)
+  }
+  ggforest(hr_model, data = as.data.frame(temp_can), main = paste0("Hazard ratio of ", x, "(PTVpli)"), refLabel = "reference")
+})
+
+PTVpli_surv_cox_forest = ggarrange(plotlist = PTVpli_tumor_surv_forest_plot, ncol = 6, nrow = 5)
+ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Survival/PTVpli_forest_surv.png", plot = PTVpli_surv_cox_forest, width = 150, height = 80, units = "cm", limitsize = F, dpi = 300)
 
 ```
 
