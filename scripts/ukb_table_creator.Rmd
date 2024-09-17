@@ -635,7 +635,7 @@ q_tumor_spec = lapply(X = tumors, FUN = function(x){
     quantile(probs = seq(0, 1, 0.05), na.rm = T)
 })
 names(q_tumor_spec) = tumors
-q_tumor_spec[["Pancreas"]][c("5%", "95%")]
+q_tumor_spec[["No_cancer"]][c("5%", "95%")]
 #Add to ukb
 
 cancer_data_list = lapply(X = tumors, FUN = function(t){
@@ -686,12 +686,12 @@ ukb_data_cancer_list = lapply(X = tumors, FUN = function(t){
                             include.lowest = TRUE)) %>%
     ungroup()
 })
-ukb_data_cancer = bind_rows(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list))
+ukb_data_cancer = bind_rows(ukb_data_cancer_list)
 
 #Tumor specific by histology group
 
 tumors_hist = unique(ukb_data_cancer$hist_tumor_cat)
-tumors_hist = tumors_hist[tumors_hist != "No_cancer"]
+#tumors_hist = tumors_hist[tumors_hist != "No_cancer"]
 q_tumor_spec_hist = lapply(X = tumors_hist, FUN = function(x){
   ukb_data_cancer %>% 
     filter(hist_tumor_cat == x) %>% 
@@ -742,7 +742,7 @@ ukb_data_cancer_list_hist = lapply(X = tumors_hist, FUN = function(t){
                                  breaks = unique(q_tumor_spec_hist[[t]][c("0%", "90%", "100%")]), include.lowest = TRUE)) %>% 
     ungroup()
 })
-ukb_data_cancer = rbind(ukb_data_no_cancer, bind_rows(ukb_data_cancer_list_hist))
+ukb_data_cancer = bind_rows(ukb_data_cancer_list_hist)
 
 
 save(q_tumor_spec, q_all, q_tumor_spec_hist, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/q_cut_off")
@@ -751,6 +751,7 @@ save(q_tumor_spec, q_all, q_tumor_spec_hist, file = "C:/Users/bagil/Desktop/MyGi
 
 save(ukb_data_cancer, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 save(cancer_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cancer_data_final")
+
 
 #UKB datas
 #10%
