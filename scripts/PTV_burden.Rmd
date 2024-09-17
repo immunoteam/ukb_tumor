@@ -1,0 +1,168 @@
+---
+title: "PTV_burden"
+author: "Balazs Koncz"
+date: "2024-09-17"
+output: html_document
+---
+
+
+```{r}
+Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "ggplot2", "pbapply", "clusterProfiler")
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+```
+
+#GO terms
+
+```{r}
+go_terms = fread("objects/go_terms.txt") #https://amigo.geneontology.org/amigo/search/bioentity
+go_terms %<>% filter(grepl("UniProt", V1))
+go_terms$V1 = gsub("UniProtKB:", "", go_terms$V1)
+go_terms$V10 = gsub("PANTHER:", "", go_terms$V10)
+go_terms = go_terms[,c(2,1,6,7,5,10,11)]
+colnames(go_terms) = c("Gene", "UniProtKB", "Protein", "GO_terms", "GO_descriptions", "PANTHER_family", "PANTHER_description")
+
+goterm_tbl = apply(go_terms, 1, function(x) {
+  data.frame(Gene = x[1], 
+             UniProtKB = x[2], 
+             Protein = x[3], 
+             GO_term = strsplit(x[4], "\\|")[[1]],
+             GO_description = strsplit(x[5], "\\|")[[1]],
+             PANTHER_family = x[6],
+             PANTHER_description = x[7])
+})
+table(sapply(goterm_tbl, ncol))
+goterm_tbl %<>% bind_rows()
+
+save(goterm_tbl, file = "objects/goterm_tbl")
+```
+
+#MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv
+##Extract genes
+
+```{r}
+#Load PTV burden data
+ptvb = fread("objects/PTV_2024_05/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+
+genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb$Genes, ","), use.names = F))))
+gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+rm(gene_symbols)
+
+```
+
+##Immune-related genes (using GO terms)
+
+```{r}
+genes_immune = genes_all %>% filter(SYMBOL %in% goterm_tbl$Gene[grepl("immune", goterm_tbl$GO_description)])
+
+```
+
+##Tumor suppressor genes
+
+```{r}
+tsg = fread("objects/tumor_supressor_genes_bioinfo_uth.txt")
+genes_tsg = genes_all %>% filter(SYMBOL %in% tsg$GeneSymbol) #953
+
+```
+
+##pLI genes
+
+```{r}
+pli = fread("objects/LoF_intolerant_genes.tsv")
+genes_pli = genes_all %>% filter(SYMBOL %in% pli$gene) #2865
+
+```
+
+##Calculate specific PTV burden scores
+
+```{r}
+temp = pblapply(ptvb$Genes, function(x) {
+  g = strsplit(x, ",")[[1]]
+  c(sum(g %fin% genes_immune$ENSEMBL),
+    sum(g %fin% genes_tsg$ENSEMBL),
+    sum(g %fin% genes_pli$ENSEMBL),
+    sum(g %fin% genes_immune$ENSEMBL | g %fin% genes_tsg$ENSEMBL),
+    sum(g %fin% genes_immune$ENSEMBL | g %fin% genes_pli$ENSEMBL),
+    sum(g %fin% genes_tsg$ENSEMBL | g %fin% genes_pli$ENSEMBL),
+    sum(g %fin% genes_immune$ENSEMBL & g %fin% genes_tsg$ENSEMBL),
+    sum(g %fin% genes_immune$ENSEMBL & g %fin% genes_pli$ENSEMBL),
+    sum(g %fin% genes_tsg$ENSEMBL & g %fin% genes_pli$ENSEMBL),
+    sum(g %fin% genes_immune$ENSEMBL | g %fin% genes_tsg$ENSEMBL | g %fin% genes_pli$ENSEMBL),
+    sum(g %fin% genes_immune$ENSEMBL & g %fin% genes_tsg$ENSEMBL & g %fin% genes_pli$ENSEMBL))
+})
+temp2 = do.call(rbind, temp)
+colnames(temp2) = c("PTVim", "PTVtsg", "PTVpli", "PTVimORtsg", "PTVimORpli", "PTVtsgORpli", "PTVimANDtsg", "PTVimANDpli", "PTVtsgANDpli", "PTVimORtsgORpli", "PTVimANDtsgANDpli")
+ptvb = cbind(ptvb, temp2)
+
+save(ptvb, file = "objects/ptvb_im_tsg_pli")
+
+```
+
+#PTVburden_without_MAF-001.tsv
+
+```{r}
+#Load PTV burden data
+ptvb = fread("objects/PTVburden_without_MAF-001/PTVburden_without_MAF-001.tsv")
+
+genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb$Genes, ","), use.names = F))))
+gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+rm(gene_symbols)
+
+```
+
+##Immune-related genes (using GO terms)
+
+```{r}
+genes_immune = genes_all %>% filter(SYMBOL %in% goterm_tbl$Gene[grepl("immune", goterm_tbl$GO_description)]) #1120
+
+```
+
+##Tumor suppressor genes
+
+```{r}
+tsg = fread("objects/tumor_supressor_genes_bioinfo_uth.txt")
+genes_tsg = genes_all %>% filter(SYMBOL %in% tsg$GeneSymbol) #908
+
+```
+
+##pLI genes
+
+```{r}
+pli = fread("objects/LoF_intolerant_genes.tsv")
+genes_pli = genes_all %>% filter(SYMBOL %in% pli$gene) #2804
+
+```
+
+##Calculate specific PTV burden scores
+
+```{r}
+temp = pblapply(ptvb$Genes, function(x) {
+  g = strsplit(x, ",")[[1]]
+  c(sum(g %fin% genes_immune$ENSEMBL),
+    sum(g %fin% genes_tsg$ENSEMBL),
+    sum(g %fin% genes_pli$ENSEMBL))
+})
+temp2 = do.call(rbind, temp)
+colnames(temp2) = c("PTVim", "PTVtsg", "PTVpli")
+ptvb = cbind(ptvb, temp2)
+
+save(ptvb, file = "objects/ptvb_without_MAF_im_tsg_pli")
+
+```
+
+
+
+#Correlations
+
+```{r}
+ComplexHeatmap::Heatmap(cor(ptvb[,c(3,6:8)], method = "spearman"), cluster_rows = F, cluster_columns = F)
+
+table(ptvb[,3])
+table(ptvb[,6])
+table(ptvb[,7])
+table(ptvb[,8])
+
+```

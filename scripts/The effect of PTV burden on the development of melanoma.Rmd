@@ -243,4 +243,176 @@ lapply(icd10_codes, function(code) {
 ```
 
 
+#Thyroid
+
+```{r}
+load("objects/ukb_data_cancer_final")
+load("objects/ptvb_im_tsg_pli")
+
+cancer_tbl = ukb_data_cancer %>% filter(ICD10_codes == "C73") %>% arrange(diag_date)
+cancer_tbl = cancer_tbl[!duplicated(cancer_tbl$eid),]
+cancer_tbl %<>% mutate(cancer = T, .after = eid)
+
+nocancer_tbl = ukb_data_cancer %>% filter(is.na(ICD10))
+nocancer_tbl = nocancer_tbl[!duplicated(nocancer_tbl$eid),]
+nocancer_tbl %<>% mutate(cancer = F, .after = eid)
+
+ukb_data = rbind(cancer_tbl, nocancer_tbl)
+rm(cancer_tbl, nocancer_tbl, ukb_data_cancer)
+
+ukb_data$cancer = as.factor(ukb_data$cancer)
+
+ukb_data$PTVtsg = ptvb$PTVtsg[fmatch(ukb_data$eid, ptvb$Patient.ID)]
+
+ukb_data %<>% select(eid, cancer, sex, , gpca_1, gpca_2, gpca_3, gpca_4, gpca_5, gpca_6, gpca_7, gpca_8, gpca_9, gpca_10, gpca_11, gpca_12, gpca_13, gpca_14, gpca_15, gpca_16, gpca_17, gpca_18, gpca_19, gpca_20, PTVtsg)
+
+ukb_data$sex[ukb_data$sex == 0] = "female"
+ukb_data$sex[ukb_data$sex == 1] = "male"
+
+#AUTo ML
+h2o.init()
+
+ukb_data %<>% mutate_if(is.character, as.factor)
+
+df = as.h2o(ukb_data)
+
+h2o.describe(df)
+
+df_splits = h2o.splitFrame(data = df, ratios = 0.8, seed = 123)
+train = df_splits[[1]]
+valid = df_splits[[2]]
+
+#AUTO ML
+y = "cancer"
+x = setdiff(names(train), c(y, "eid"))
+aml = h2o.automl(x = x,
+                 y = y,
+                 training_frame = train, 
+                 validation_frame = valid, 
+                 max_models = 20, 
+                 seed = 123, 
+                 nfolds = 5,
+                 balance_classes = T,
+                 export_checkpoints_dir = "D:/CloudStation/mygit/ukb_tumor/objects/autoML_tumor_dev") 
+#export_checkpoints_dir = "objects/603/models_iedb"
+#User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.
+
+res_model = as_tibble(aml@leaderboard)
+
+# model_ids = as.data.frame(iedb_aml@leaderboard$model_id)[,1]
+# se = h2o.getModel(grep("XRT", model_ids, value = T)[1])
+# metalearner = h2o.getModel(se@model$metalearner$name)
+# h2o.varimp(metalearner)
+# h2o.varimp_plot(metalearner)
+
+m1 = h2o.loadModel("D:/CloudStation/mygit/ukb_tumor/objects/autoML_tumor_dev/GLM_1_AutoML_1_20240916_154719")
+h2o.varimp_plot(m1)
+
+fisher.test(table(ukb_data$PTVtsg>0, ukb_data$cancer))
+
+```
+
+#Leukemia
+
+```{r}
+load("objects/ukb_data_cancer_final")
+load("objects/ptvb_im_tsg_pli")
+
+cancer_tbl = ukb_data_cancer %>% filter(ICD10_codes == "C92") %>% arrange(diag_date)
+cancer_tbl = cancer_tbl[!duplicated(cancer_tbl$eid),]
+cancer_tbl %<>% mutate(cancer = T, .after = eid)
+
+nocancer_tbl = ukb_data_cancer %>% filter(is.na(ICD10))
+nocancer_tbl = nocancer_tbl[!duplicated(nocancer_tbl$eid),]
+nocancer_tbl %<>% mutate(cancer = F, .after = eid)
+
+ukb_data = rbind(cancer_tbl, nocancer_tbl)
+rm(cancer_tbl, nocancer_tbl, ukb_data_cancer)
+
+ukb_data$cancer = as.factor(ukb_data$cancer)
+
+ukb_data$PTVtsg = ptvb$PTVtsg[fmatch(ukb_data$eid, ptvb$Patient.ID)]
+
+ukb_data %<>% select(eid, cancer, sex, , gpca_1, gpca_2, gpca_3, gpca_4, gpca_5, gpca_6, gpca_7, gpca_8, gpca_9, gpca_10, gpca_11, gpca_12, gpca_13, gpca_14, gpca_15, gpca_16, gpca_17, gpca_18, gpca_19, gpca_20, PTVtsg)
+
+ukb_data$sex[ukb_data$sex == 0] = "female"
+ukb_data$sex[ukb_data$sex == 1] = "male"
+
+#AUTo ML
+h2o.init()
+
+ukb_data %<>% mutate_if(is.character, as.factor)
+
+df = as.h2o(ukb_data)
+
+h2o.describe(df)
+
+df_splits = h2o.splitFrame(data = df, ratios = 0.8, seed = 123)
+train = df_splits[[1]]
+valid = df_splits[[2]]
+
+#AUTO ML
+y = "cancer"
+x = setdiff(names(train), c(y, "eid"))
+aml = h2o.automl(x = x,
+                 y = y,
+                 training_frame = train, 
+                 validation_frame = valid, 
+                 max_models = 20, 
+                 seed = 123, 
+                 nfolds = 5,
+                 balance_classes = T,
+                 export_checkpoints_dir = "D:/CloudStation/mygit/ukb_tumor/objects/autoML_leukemia_dev") 
+#export_checkpoints_dir = "objects/603/models_iedb"
+#User specified a validation frame with cross-validation still enabled. Please note that the models will still be validated using cross-validation only, the validation frame will be used to provide purely informative validation metrics on the trained models.
+
+res_model = as_tibble(aml@leaderboard)
+
+# model_ids = as.data.frame(iedb_aml@leaderboard$model_id)[,1]
+# se = h2o.getModel(grep("XRT", model_ids, value = T)[1])
+# metalearner = h2o.getModel(se@model$metalearner$name)
+# h2o.varimp(metalearner)
+# h2o.varimp_plot(metalearner)
+
+m1 = h2o.loadModel("D:/CloudStation/mygit/ukb_tumor/objects/autoML_leukemia_dev/GLM_1_AutoML_2_20240916_211528")
+h2o.varimp_plot(m1)
+
+```
+
+
+#Fisher tests
+
+```{r}
+load("objects/ukb_data_cancer_final")
+load("objects/ptvb_im_tsg_pli")
+ukb_data_cancer$PTVtsg = ptvb$PTVtsg[fmatch(ukb_data_cancer$eid, ptvb$Patient.ID)]
+
+nocancer_tbl = ukb_data_cancer %>% filter(is.na(ICD10))
+nocancer_tbl = nocancer_tbl[!duplicated(nocancer_tbl$eid),]
+nocancer_tbl %<>% mutate(cancer = F, .after = eid)
+
+library(future.apply)
+plan(multisession(workers = 4))
+
+icd10s = ukb_data_cancer %>% group_by(ICD10_codes) %>% summarise(n = n()) %>% filter(n > 500) %>% pull(ICD10_codes)
+res_p_or = future_sapply(icd10s, function(x) {
+  cancer_tbl = ukb_data_cancer %>% filter(ICD10_codes == x) %>% arrange(diag_date)
+  cancer_tbl = cancer_tbl[!duplicated(cancer_tbl$eid),]
+  cancer_tbl %<>% mutate(cancer = T, .after = eid)
+  ukb_data = rbind(cancer_tbl, nocancer_tbl)
+  ukb_data$cancer = as.factor(ukb_data$cancer)
+  if(nrow(table(ukb_data$PTVtsg>0, ukb_data$cancer)) == 2 & ncol(table(ukb_data$PTVtsg>0, ukb_data$cancer)) == 2) {
+    ft = fisher.test(table(ukb_data$PTVtsg>0, ukb_data$cancer))
+    out = c(x, ft$p.value, ft$estimate)
+  } else {
+    out = c(x, NA, NA)
+  }
+  out
+})
+res_p_or = as.data.frame(t(res_p_or))
+
+
+
+
+```
 
