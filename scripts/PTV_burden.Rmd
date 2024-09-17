@@ -5,6 +5,7 @@ date: "2024-09-17"
 output: html_document
 ---
 
+#Setup
 
 ```{r}
 Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "ggplot2", "pbapply", "clusterProfiler")
@@ -140,7 +141,7 @@ genes_pli = genes_all %>% filter(SYMBOL %in% pli$gene) #2804
 
 ```{r}
 temp = pblapply(ptvb$Genes, function(x) {
-  g = strsplit(x, ",")[[1]]
+  g = unique(strsplit(x, ",")[[1]])
   c(sum(g %fin% genes_immune$ENSEMBL),
     sum(g %fin% genes_tsg$ENSEMBL),
     sum(g %fin% genes_pli$ENSEMBL))
@@ -149,8 +150,15 @@ temp2 = do.call(rbind, temp)
 colnames(temp2) = c("PTVim", "PTVtsg", "PTVpli")
 ptvb = cbind(ptvb, temp2)
 
+ptvb = as.data.frame(ptvb[,c(1,3,6,7,8)])
+
 save(ptvb, file = "objects/ptvb_without_MAF_im_tsg_pli")
 
+ggplot(ptvb, aes(x = PTVim)) + geom_histogram()
+ggplot(ptvb, aes(x = PTVtsg)) + geom_histogram()
+quantile(ptvb$PTVtsg, probs = seq(0,1,0.1))
+quantile(ptvb$PTVim, probs = seq(0,1,0.1))
+quantile(ptvb$PTVpli, probs = seq(0,1,0.1))
 ```
 
 
@@ -158,6 +166,7 @@ save(ptvb, file = "objects/ptvb_without_MAF_im_tsg_pli")
 #Correlations
 
 ```{r}
+load("objects/ptvb_without_MAF_im_tsg_pli")
 ComplexHeatmap::Heatmap(cor(ptvb[,c(3,6:8)], method = "spearman"), cluster_rows = F, cluster_columns = F)
 
 table(ptvb[,3])

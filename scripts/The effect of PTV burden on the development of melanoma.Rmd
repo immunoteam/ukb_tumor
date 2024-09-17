@@ -384,7 +384,7 @@ h2o.varimp_plot(m1)
 
 ```{r}
 load("objects/ukb_data_cancer_final")
-load("objects/ptvb_im_tsg_pli")
+load("objects/ptvb_without_MAF_im_tsg_pli")
 ukb_data_cancer$PTVtsg = ptvb$PTVtsg[fmatch(ukb_data_cancer$eid, ptvb$Patient.ID)]
 
 nocancer_tbl = ukb_data_cancer %>% filter(is.na(ICD10))
@@ -402,7 +402,7 @@ res_p_or = future_sapply(icd10s, function(x) {
   ukb_data = rbind(cancer_tbl, nocancer_tbl)
   ukb_data$cancer = as.factor(ukb_data$cancer)
   if(nrow(table(ukb_data$PTVtsg>0, ukb_data$cancer)) == 2 & ncol(table(ukb_data$PTVtsg>0, ukb_data$cancer)) == 2) {
-    ft = fisher.test(table(ukb_data$PTVtsg>0, ukb_data$cancer))
+    ft = fisher.test(table(ukb_data$PTVtsg>5, ukb_data$cancer))
     out = c(x, ft$p.value, ft$estimate)
   } else {
     out = c(x, NA, NA)
@@ -410,7 +410,7 @@ res_p_or = future_sapply(icd10s, function(x) {
   out
 })
 res_p_or = as.data.frame(t(res_p_or))
-
+res_p_or$V2 = as.numeric(res_p_or$V2)
 
 
 
