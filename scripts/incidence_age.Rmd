@@ -4290,12 +4290,14 @@ dev.off()
 ```{r}
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 
-cuminc_table = ukb_data_cancer %>% select(eid, birthdate, sex, ethnic_group, attending_1, diag_date, date_of_death, death, cancer_type, hist_tumor_cat, PTV_burden, PTV_uni_groups, PTVim_group, PTVpli_group, PTVtsg_group)
+cuminc_table = ukb_data_cancer %>% select(eid, birthdate, sex, ethnic_group, attending_1, diag_date, date_of_death, death, cancer_type, hist_tumor_cat, PTV_burden, PTV_uni_groups_1, PTV_uni_groups_2, PTVim_group, PTVpli_group, PTVtsg_group_1, PTVtsg_group_2)
 
 
 rm(ukb_data_cancer)
+cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
 cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
-
+cuminc_table = cuminc_table[cuminc_table$cancer_type != "Hydatidiform_mole", ]
+cuminc_table$cancer_type = sort(cuminc_table$cancer_type)
 has_tumor = cuminc_table %>% filter(cancer_type != "No_cancer")
 no_tumor = cuminc_table %>% filter(cancer_type == "No_cancer")
 
@@ -4316,17 +4318,20 @@ cuminc_table$event = ifelse(cuminc_table$cancer_type == "No_cancer", 0, 1)
 
 cuminc_table$gender = as.factor(cuminc_table$gender)
 cuminc_table$event = as.factor(cuminc_table$event)
-inc_obj =  cuminc(Surv(time, event) ~ PTVtsg_group + gender, data = cuminc_table)
+grayp_f = tidycmprsk::cuminc(Surv(time, event) ~ PTV_uni_groups_2, data = cuminc_table[cuminc_table$gender == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6) 
+grayp_m = tidycmprsk::cuminc(Surv(time, event) ~ PTV_uni_groups_2, data = cuminc_table[cuminc_table$gender == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+inc_obj =  cuminc(Surv(time, event) ~ PTV_uni_groups_2 + gender, data = cuminc_table)
 inc_plot = ggcuminc(x = inc_obj) +
   add_confidence_interval() +
   scale_ggsurvfit() +
+  annotate(geom = "text", label = paste0("\nfemale: p = ", grayp_f, ", male: p = ", grayp_m), x = 10, y = Inf ) +
   xlab("Time (years)") +
-  ggtitle("Incidence for PTVtsg (cancer type)") +
+  ggtitle("Cumulative incedence for all tumor (universal) \n(95% cutoff) ") +
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
         legend.position = "right")
 plot_build <- ggplot_build(inc_plot)
 labels <- unique(plot_build$plot$data$strata)
-base_colors <- c(  "green",  "blue", "purple", "red")
+base_colors <- c( "purple" , "red", "green", "blue")
 if(length(labels) > length(base_colors)) {
   base_colors <- rep(base_colors, length.out = length(labels))
 }
@@ -4334,7 +4339,7 @@ color_mapping <- setNames(base_colors[1:length(labels)], labels)
 inc_plot <- inc_plot +
   scale_color_manual(values = color_mapping) +
   scale_fill_manual(values = color_mapping)
-inc_table = tbl_cuminc(x = cuminc(Surv(time, event) ~ PTVtsg_group + gender, data = cuminc_table), label_header = "**{time} year**",times = c(30, 40, 50, 60, 70, 80)) %>% 
+inc_table = tbl_cuminc(x = cuminc(Surv(time, event) ~ PTV_uni_groups_2 + gender, data = cuminc_table), label_header = "**{time} year**",times = c(30, 40, 50, 60, 70, 80)) %>% 
   add_nevent(location = c("label", "level")) %>% 
   add_n(location = c("label", "level")) %>% 
   add_p() %>%
@@ -4345,7 +4350,13 @@ inc_table_grob <- tableGrob(inc_table_df)
 #ggarrange(inc_plot, inc_table_grob, ncol = 1, nrow = 2, heights = c(3, 1))
 fin_plot = grid.arrange(inc_plot, inc_table_grob, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2), c(2, 2)))
 
-ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg_can_all.png", fin_plot, width = 50, height = 50, units = "cm", limitsize = F, dpi = 300)
+
+
+#ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg1_can_all.png", fin_plot, width = 50, height = 50, units = "cm", limitsize = F, dpi = 300)
+
+pdf("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVuni2_can_all.pdf", height = 10, width = 16)
+grid.draw(fin_plot)
+dev.off()
 
 #png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_can_all.png", width = 100, height = 100, units = "cm", res = 300)
 #print(fin_plot)
