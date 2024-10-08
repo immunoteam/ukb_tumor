@@ -1,16 +1,19 @@
 library(data.table)
 library(Rfast)
 library(fastmatch)
-#data = fread("objects/ukbiobank_HLA.txt", sep = "\t")
-data = fread("objects/22182.txt", sep = "\t")
+library(tidyverse)
+library(magrittr)
+data = fread("objects/ukbiobank_HLA.txt", sep = "\t")
+data %<>% select(V1, eid) %>% set_colnames(c("eid", "value"))
+#data = fread("objects/22182.txt", sep = "\t")
 #cn = readLines("objects/hla_imp_header_alleles.txt")
-cn = readLines("objects/hla_data_header.txt")
+cn = readLines("objects/hlaDataHeader.txt")
 cn = unlist(strsplit(cn, "\t"))
 cn = unname(sapply(cn, function(x) {ifelse(nchar(x) %in% c(5,8), gsub("_", "_0", x), x)}))
-length(unlist(strsplit(data$value[3], ",")))
+length(strsplit(data$value[3], ",")[[1]])
 Table(sapply(data$value, function(x) length(unlist(strsplit(x, ",")))))
 
-genotypes_list = lapply(data$eid, function(x) {unlist(strsplit(x, ","))})
+genotypes_list = lapply(data$value, function(x) {unlist(strsplit(x, ","))})
 Table(lengths(genotypes_list))
 
 genotypes_hla = lapply(genotypes_list, function(x) {
@@ -47,3 +50,8 @@ genotypes_hla6 = lapply(genotypes_hla, function(x) {
   }
 })
 Table(lengths(genotypes_hla6))
+
+
+
+length(c(1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.886666666666667,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.986666666666667,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0.986666666666667,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0))
+length(c(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0))

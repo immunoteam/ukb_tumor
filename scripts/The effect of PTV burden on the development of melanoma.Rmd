@@ -394,15 +394,15 @@ nocancer_tbl %<>% mutate(cancer = F, .after = eid)
 library(future.apply)
 plan(multisession(workers = 4))
 
-icd10s = ukb_data_cancer %>% group_by(ICD10_codes) %>% summarise(n = n()) %>% filter(n > 500) %>% pull(ICD10_codes)
-res_p_or = future_sapply(icd10s, function(x) {
-  cancer_tbl = ukb_data_cancer %>% filter(ICD10_codes == x) %>% arrange(diag_date)
+cancers = ukb_data_cancer %>% group_by(cancer_type) %>% summarise(n = n()) %>% filter(n > 500) %>% pull(cancer_type)
+res_p_or = future_sapply(cancers, function(x) {
+  cancer_tbl = ukb_data_cancer %>% filter(cancer_type == x) %>% arrange(diag_date)
   cancer_tbl = cancer_tbl[!duplicated(cancer_tbl$eid),]
   cancer_tbl %<>% mutate(cancer = T, .after = eid)
   ukb_data = rbind(cancer_tbl, nocancer_tbl)
   ukb_data$cancer = as.factor(ukb_data$cancer)
   if(nrow(table(ukb_data$PTVtsg>0, ukb_data$cancer)) == 2 & ncol(table(ukb_data$PTVtsg>0, ukb_data$cancer)) == 2) {
-    ft = fisher.test(table(ukb_data$PTVtsg>5, ukb_data$cancer))
+    ft = fisher.test(table(ukb_data$PTVtsg>4, ukb_data$cancer))
     out = c(x, ft$p.value, ft$estimate)
   } else {
     out = c(x, NA, NA)
@@ -410,8 +410,9 @@ res_p_or = future_sapply(icd10s, function(x) {
   out
 })
 res_p_or = as.data.frame(t(res_p_or))
-res_p_or$V2 = as.numeric(res_p_or$V2)
-
+colnames(res_p_or) = c("tumor", "pvalue", "or")
+res_p_or$pvalue = as.numeric(res_p_or$pvalue)
+res_p_or$pvalueCor = p.adjust(res_p_or$pvalue, method = "fdr")
 
 
 ```
