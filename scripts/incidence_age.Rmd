@@ -5871,7 +5871,7 @@ ptv_pvals_all = lapply(X = PTV_types, FUN = function(x){
   n = n + 1
   .GlobalEnv$n = n
   cuminc_table_f = cuminc_table %>% select(eid, birthdate, ethnic_group, attending_1,diag_date, date_of_death, death, cancer_type, gender, PTV_burden_raw, PTV_burden_MAF, all_of(x))
-  colnames(cuminc_table_f)[11] = "PTV_group"
+  colnames(cuminc_table_f)[12] = "PTV_group"
   pvals_list = lapply(X = tumors, FUN = function(i){
     m = m + 1
     .GlobalEnv$m = m
@@ -5973,7 +5973,7 @@ ptv_pvals_all = lapply(X = PTV_types, FUN = function(x){
   n = n + 1
   .GlobalEnv$n = n
   cuminc_table_f = cuminc_table %>% select(eid, birthdate, ethnic_group, attending_1,diag_date, date_of_death, death, cancer_type, gender, PTV_burden_raw, PTV_burden_MAF, all_of(x))
-  colnames(cuminc_table_f)[11] = "PTV_group"
+  colnames(cuminc_table_f)[12] = "PTV_group"
   pvals_list = lapply(X = tumors, FUN = function(i){
     m = m + 1
     .GlobalEnv$m = m
@@ -6077,7 +6077,7 @@ ptv_pvals_all = lapply(X = PTV_types, FUN = function(x){
   n = n + 1
   .GlobalEnv$n = n
   cuminc_table_f = cuminc_table %>% select(eid, birthdate, ethnic_group, attending_1,diag_date, date_of_death, death, cancer_type, gender, PTV_burden, all_of(x))
-  colnames(cuminc_table_f)[11] = "PTV_group"
+  colnames(cuminc_table_f)[12] = "PTV_group"
   pvals_list = lapply(X = tumors, FUN = function(i){
     m = m + 1
     .GlobalEnv$m = m
@@ -6178,7 +6178,7 @@ ptv_pvals_all = lapply(X = PTV_types, FUN = function(x){
   n = n + 1
   .GlobalEnv$n = n
   cuminc_table_f = cuminc_table %>% select(eid, birthdate, ethnic_group, attending_1,diag_date, date_of_death, death, cancer_type, gender, PTV_burden, all_of(x))
-  colnames(cuminc_table_f)[11] = "PTV_group"
+  colnames(cuminc_table_f)[12] = "PTV_group"
   pvals_list = lapply(X = tumors, FUN = function(i){
     m = m + 1
     .GlobalEnv$m = m
@@ -6288,8 +6288,8 @@ cuminc_est_matrix_all = cuminc_est_matrix_all[, colSums(is.na(cuminc_est_matrix_
 
 #Heatmap for conf
 col1 = colorRamp2(c(min(cuminc_est_matrix_all), max(cuminc_est_matrix_all)), c("blue","red"))
-row_dend = dendsort(hclust(dist(cuminc_est_matrix_all)))
 col_dend = dendsort(hclust(dist(t(cuminc_est_matrix_all))))
+pval = 
 
 cuminc_heatmap_est = ComplexHeatmap::Heatmap(matrix = cuminc_est_matrix_all, col = col1, name = "values", rect_gp = gpar(col = "white", lwd = 2), cluster_rows = F, cluster_columns = col_dend, cell_fun = function(j, i, x, y, width, height, fill) {if(cuminc_est_matrix_all[i, j] > 0)grid.text(sprintf("%.1f", cuminc_est_matrix_all[i, j]), x, y, gp = gpar(fontsize = 10))})
 
@@ -6303,6 +6303,7 @@ cuminc_hm_df_pval[cuminc_hm_df_pval == "No_patient"] = NA
 cuminc_pval_matrix_all = as.matrix(as.data.frame(lapply(cuminc_hm_df_pval, as.numeric)))
 rownames(cuminc_pval_matrix_all) = rownames(cuminc_hm_df_pval)
 cuminc_pval_matrix_all = cuminc_pval_matrix_all[, colSums(is.na(cuminc_pval_matrix_all)) == 0]
+
 ##New mat
 cuminc_pval_matrix_all[cuminc_pval_matrix_all == 0] = cuminc_pval_matrix_all[cuminc_pval_matrix_all == 0] + min(cuminc_pval_matrix_all)
 cuminc_pvals_matrix_all_log = ifelse(cuminc_pval_matrix_all < 0, -log(abs(cuminc_pval_matrix_all)), log(cuminc_pval_matrix_all))
