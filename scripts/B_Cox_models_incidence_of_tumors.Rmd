@@ -1,0 +1,46 @@
+---
+title: "Cox models - incidence of tumors"
+author: "Balazs Koncz"
+date: "2024-10-08"
+output: html_document
+---
+
+#Setup
+
+```{r}
+Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "h2o", "Rfast", "tidycmprsk")
+#              , , "pbapply", "protr", , "future.apply", "networkD3", "ggpubr", "RColorBrewer", "Rfast", , "Biostrings", "ComplexHeatmap", "ggrepel")
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+```
+
+
+
+```{r}
+setwd("D:/CloudStation/mygit/ukb_tumor/")
+load("objects/ukb_data_cancer_final")
+sum(Table(ukb_data_cancer$cancer_type))
+
+tempdf_x = subset(ukb_data_cancer, cancer_type == "Prostate")
+tempdf_x = dplyr::arrange(tempdf_x, diag_date)
+tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
+tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
+#gender_counts = table(tempdf_x$sex)
+
+tempdf_no_x = subset(ukb_data_cancer, cancer_type != "Prostate")
+tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
+tempdf_no_x %<>% mutate(inc_age = case_when(
+  death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
+  death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
+))
+unique_tempdf = rbind(tempdf_x, tempdf_no_x)
+rm(ukb_data_cancer, tempdf_no_x, tempdf_x)
+
+unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == "Prostate", 1, 0))
+#unique_tempdf$gender = as.factor(unique_tempdf$gender)
+gc()
+grayp_m = cuminc(Surv(inc_age, inc_event) ~ PTVtsg_MAF, data = unique_tempdf[unique_tempdf$sex == 1,])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_m = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+```
+
