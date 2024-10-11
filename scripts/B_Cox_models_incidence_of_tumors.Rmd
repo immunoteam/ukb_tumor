@@ -288,7 +288,7 @@ resdf = as.data.frame(resdf)
 resdf %<>% mutate_at(2:25, as.numeric)
 save(resdf, file = "Objects/res_cox_model_anytumor")
 
-#Forest plot
+#Generate Forest plots
 pbsapply(ptvs, function(p) {
   i=i+1
   .GlobalEnv$i = i
