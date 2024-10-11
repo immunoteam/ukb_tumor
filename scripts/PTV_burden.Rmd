@@ -8,7 +8,8 @@ output: html_document
 #Setup
 
 ```{r}
-Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "ggplot2", "pbapply", "clusterProfiler")
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "ggplot2", "pbapply", "clusterProfiler", "org.Hs.eg.db", "Rfast")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
@@ -17,7 +18,7 @@ options(dplyr.summarise.inform = FALSE)
 #GO terms
 
 ```{r}
-go_terms = fread("objects/go_terms.txt") #https://amigo.geneontology.org/amigo/search/bioentity
+go_terms = fread("Objects/go_terms.txt") #https://amigo.geneontology.org/amigo/search/bioentity
 go_terms %<>% filter(grepl("UniProt", V1))
 go_terms$V1 = gsub("UniProtKB:", "", go_terms$V1)
 go_terms$V10 = gsub("PANTHER:", "", go_terms$V10)
@@ -36,76 +37,14 @@ goterm_tbl = apply(go_terms, 1, function(x) {
 table(sapply(goterm_tbl, ncol))
 goterm_tbl %<>% bind_rows()
 
-save(goterm_tbl, file = "objects/goterm_tbl")
-```
-
-#MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv
-##Extract genes
-
-```{r}
-#Load PTV burden data
-ptvb = fread("objects/PTV_2024_05/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
-
-genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb$Genes, ","), use.names = F))))
-gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
-genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
-rm(gene_symbols)
-
-```
-
-##Immune-related genes (using GO terms)
-
-```{r}
-genes_immune = genes_all %>% filter(SYMBOL %in% goterm_tbl$Gene[grepl("immune", goterm_tbl$GO_description)])
-
-```
-
-##Tumor suppressor genes
-
-```{r}
-tsg = fread("objects/tumor_supressor_genes_bioinfo_uth.txt")
-genes_tsg = genes_all %>% filter(SYMBOL %in% tsg$GeneSymbol) #953
-
-```
-
-##pLI genes
-
-```{r}
-pli = fread("objects/LoF_intolerant_genes.tsv")
-genes_pli = genes_all %>% filter(SYMBOL %in% pli$gene) #2865
-
-```
-
-##Calculate specific PTV burden scores
-
-```{r}
-temp = pblapply(ptvb$Genes, function(x) {
-  g = strsplit(x, ",")[[1]]
-  c(sum(g %fin% genes_immune$ENSEMBL),
-    sum(g %fin% genes_tsg$ENSEMBL),
-    sum(g %fin% genes_pli$ENSEMBL),
-    sum(g %fin% genes_immune$ENSEMBL | g %fin% genes_tsg$ENSEMBL),
-    sum(g %fin% genes_immune$ENSEMBL | g %fin% genes_pli$ENSEMBL),
-    sum(g %fin% genes_tsg$ENSEMBL | g %fin% genes_pli$ENSEMBL),
-    sum(g %fin% genes_immune$ENSEMBL & g %fin% genes_tsg$ENSEMBL),
-    sum(g %fin% genes_immune$ENSEMBL & g %fin% genes_pli$ENSEMBL),
-    sum(g %fin% genes_tsg$ENSEMBL & g %fin% genes_pli$ENSEMBL),
-    sum(g %fin% genes_immune$ENSEMBL | g %fin% genes_tsg$ENSEMBL | g %fin% genes_pli$ENSEMBL),
-    sum(g %fin% genes_immune$ENSEMBL & g %fin% genes_tsg$ENSEMBL & g %fin% genes_pli$ENSEMBL))
-})
-temp2 = do.call(rbind, temp)
-colnames(temp2) = c("PTVim", "PTVtsg", "PTVpli", "PTVimORtsg", "PTVimORpli", "PTVtsgORpli", "PTVimANDtsg", "PTVimANDpli", "PTVtsgANDpli", "PTVimORtsgORpli", "PTVimANDtsgANDpli")
-ptvb = cbind(ptvb, temp2)
-
-save(ptvb, file = "objects/ptvb_im_tsg_pli")
-
+save(goterm_tbl, file = "Objects/goterm_tbl")
 ```
 
 #PTVburden_without_MAF-001.tsv
 
 ```{r}
 #Load PTV burden data
-ptvb = fread("objects/PTVburden_without_MAF-001/PTVburden_without_MAF-001.tsv")
+ptvb = fread("Objects/PTVburden_without_MAF-001/PTVburden_without_MAF-001.tsv")
 
 genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb$Genes, ","), use.names = F))))
 gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
@@ -117,6 +56,7 @@ rm(gene_symbols)
 ##Immune-related genes (using GO terms)
 
 ```{r}
+load("Objects/goterm_tbl")
 genes_immune = genes_all %>% filter(SYMBOL %in% goterm_tbl$Gene[grepl("immune", goterm_tbl$GO_description)]) #1120
 
 ```
@@ -124,7 +64,7 @@ genes_immune = genes_all %>% filter(SYMBOL %in% goterm_tbl$Gene[grepl("immune", 
 ##Tumor suppressor genes
 
 ```{r}
-tsg = fread("objects/tumor_supressor_genes_bioinfo_uth.txt")
+tsg = fread("Objects/tumor_supressor_genes_bioinfo_uth.txt")
 genes_tsg = genes_all %>% filter(SYMBOL %in% tsg$GeneSymbol) #908
 
 ```
@@ -132,8 +72,8 @@ genes_tsg = genes_all %>% filter(SYMBOL %in% tsg$GeneSymbol) #908
 ##pLI genes
 
 ```{r}
-pli = fread("objects/LoF_intolerant_genes.tsv")
-genes_pli = genes_all %>% filter(SYMBOL %in% pli$gene) #2804
+pli = fread("Objects/LoF_intolerant_genes.tsv")
+genes_pli = genes_all %>% filter(SYMBOL %in% pli$gene) #2805
 
 ```
 
@@ -150,28 +90,165 @@ temp2 = do.call(rbind, temp)
 colnames(temp2) = c("PTVim", "PTVtsg", "PTVpli")
 ptvb = cbind(ptvb, temp2)
 
-ptvb = as.data.frame(ptvb[,c(1,3,6,7,8)])
-
-save(ptvb, file = "objects/ptvb_without_MAF_im_tsg_pli")
+ptvb = as.data.frame(ptvb[,c(1,2,4,6,7,8)])
+colnames(ptvb) = c("eid", "PTV", "Genes_PTV", "PTVim", "PTVtsg", "PTVpli")
 
 ggplot(ptvb, aes(x = PTVim)) + geom_histogram()
 ggplot(ptvb, aes(x = PTVtsg)) + geom_histogram()
-quantile(ptvb$PTVtsg, probs = seq(0,1,0.1))
-quantile(ptvb$PTVim, probs = seq(0,1,0.1))
-quantile(ptvb$PTVpli, probs = seq(0,1,0.1))
+quantile(ptvb$PTVtsg, probs = seq(0,1,0.01))
+quantile(ptvb$PTVim, probs = seq(0,1,0.01))
+quantile(ptvb$PTVpli, probs = seq(0,1,0.01))
+
+rm(genes_all, genes_immune, genes_pli, genes_tsg, temp, temp2)
 ```
 
+#MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv
+##Extract genes
+
+```{r}
+#Load PTV burden data
+ptvb_wMAF = fread("Objects/PTV_2024_05/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+
+genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb_wMAF$Genes, ","), use.names = F))))
+gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+rm(gene_symbols)
+
+```
+
+##Immune-related genes (using GO terms)
+
+```{r}
+genes_immune = genes_all %>% filter(SYMBOL %in% goterm_tbl$Gene[grepl("immune", goterm_tbl$GO_description)]) #1233
+```
+
+##Tumor suppressor genes
+
+```{r}
+genes_tsg = genes_all %>% filter(SYMBOL %in% tsg$GeneSymbol) #953
+```
+
+##pLI genes
+
+```{r}
+genes_pli = genes_all %>% filter(SYMBOL %in% pli$gene) #2866
+```
+
+##Calculate specific PTV burden scores
+
+```{r}
+temp = pblapply(ptvb_wMAF$Genes, function(x) {
+  g = strsplit(x, ",")[[1]]
+  c(sum(g %fin% genes_immune$ENSEMBL),
+    sum(g %fin% genes_tsg$ENSEMBL),
+    sum(g %fin% genes_pli$ENSEMBL))
+})
+temp2 = do.call(rbind, temp)
+colnames(temp2) = c("PTVim_MAF", "PTVtsg_MAF", "PTVpli_MAF")
+ptvb_wMAF = cbind(ptvb_wMAF, temp2)
+
+ptvb_wMAF = as.data.frame(ptvb_wMAF[,c(1,2,4,7,8,9)])
+colnames(ptvb_wMAF) = c("eid", "PTV_MAF", "Genes_PTV_MAF", "PTVim_MAF", "PTVtsg_MAF", "PTVpli_MAF")
+```
+
+#JOIN
+
+```{r}
+ptvb_data = ptvb %>% full_join(ptvb_wMAF, by = "eid") 
+Table(ptvb$eid %in% ptvb_data$eid)
+Table(ptvb_wMAF$eid %in% ptvb_data$eid)
+
+saveRDS(ptvb_data, file = "Objects/PTV_data.rds")
+
+rm(genes_all, genes_immune, genes_pli, genes_tsg, goterm_tbl, pli, ptvb, ptvb_wMAF, temp, temp2, tsg)
+```
 
 
 #Correlations
 
 ```{r}
-load("objects/ptvb_without_MAF_im_tsg_pli")
-ComplexHeatmap::Heatmap(cor(ptvb[,c(3,6:8)], method = "spearman"), cluster_rows = F, cluster_columns = F)
+ptvb_data = readRDS("Objects/PTV_data.rds")
+ComplexHeatmap::Heatmap(cor(ptvb_data[,c(2,4:7,9:11)], method = "spearman"), cluster_rows = F, cluster_columns = F)
 
-table(ptvb[,3])
-table(ptvb[,6])
-table(ptvb[,7])
-table(ptvb[,8])
+Table(ptvb_data[,7])
+Table(ptvb_data[,9])
+Table(ptvb_data[,10])
+Table(ptvb_data[,11])
 
 ```
+
+#Groups
+
+```{r}
+ptvb_data = readRDS("Objects/PTV_data.rds")
+ptvb_data %>% pull(eid) %>% unique() %>% length()
+
+#PTV
+ptvb_data$PTV_g90 = cut(ptvb_data$PTV, breaks = c(min(ptvb_data$PTV, na.rm = T), quantile(ptvb_data$PTV, .9, na.rm = T), max(ptvb_data$PTV, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTV_g90)
+
+ptvb_data$PTV_g95 = cut(ptvb_data$PTV, breaks = c(min(ptvb_data$PTV, na.rm = T), quantile(ptvb_data$PTV, .95, na.rm = T), max(ptvb_data$PTV, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTV_g95)
+
+#PTVim
+ptvb_data$PTVim_g90 = cut(ptvb_data$PTVim, breaks = c(min(ptvb_data$PTVim, na.rm = T), quantile(ptvb_data$PTVim, .9, na.rm = T), max(ptvb_data$PTVim, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTVim_g90)
+
+ptvb_data$PTVim_g95 = cut(ptvb_data$PTVim, breaks = c(min(ptvb_data$PTVim, na.rm = T), quantile(ptvb_data$PTVim, .95, na.rm = T), max(ptvb_data$PTVim, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTVim_g95)
+
+#PTVtsg
+ptvb_data$PTVtsg_g90 = cut(ptvb_data$PTVtsg, breaks = c(min(ptvb_data$PTVtsg, na.rm = T), quantile(ptvb_data$PTVtsg, .9, na.rm = T), max(ptvb_data$PTVtsg, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTVtsg_g90)
+
+ptvb_data$PTVtsg_g95 = cut(ptvb_data$PTVtsg, breaks = c(min(ptvb_data$PTVtsg, na.rm = T), quantile(ptvb_data$PTVtsg, .95, na.rm = T), max(ptvb_data$PTVtsg, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTVtsg_g95)
+
+#PTVpli
+ptvb_data$PTVpli_g90 = cut(ptvb_data$PTVpli, breaks = c(min(ptvb_data$PTVpli, na.rm = T), quantile(ptvb_data$PTVpli, .9, na.rm = T), max(ptvb_data$PTVpli, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTVpli_g90)
+
+# ptvb_data$PTVpli_g95 = cut(ptvb_data$PTVpli, breaks = c(min(ptvb_data$PTVpli, na.rm = T), quantile(ptvb_data$PTVpli, .95, na.rm = T), max(ptvb_data$PTVpli, na.rm = T)), include.lowest = T)
+# Table(ptvb_data$PTVpli_g95)
+# ptvb_data$PTVpli_g95 = NULL
+
+#PTV_MAF
+ptvb_data$PTV_MAF_g90 = cut(ptvb_data$PTV_MAF, breaks = c(min(ptvb_data$PTV_MAF, na.rm = T), quantile(ptvb_data$PTV_MAF, .9, na.rm = T), max(ptvb_data$PTV_MAF, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTV_MAF_g90)
+
+ptvb_data$PTV_MAF_g95 = cut(ptvb_data$PTV_MAF, breaks = c(min(ptvb_data$PTV_MAF, na.rm = T), quantile(ptvb_data$PTV_MAF, .95, na.rm = T), max(ptvb_data$PTV_MAF, na.rm = T)), include.lowest = T)
+Table(ptvb_data$PTV_MAF_g95)
+
+#PTVim_MAF
+ptvb_data$PTVim_MAF_g = cut(ptvb_data$PTVim_MAF, breaks = c(min(ptvb_data$PTVim_MAF, na.rm = T), 1, max(ptvb_data$PTVim_MAF, na.rm = T)), include.lowest = T, right = F)
+Table(ptvb_data$PTVim_MAF_g)
+
+#PTVtsg_MAF
+ptvb_data$PTVtsg_MAF_g = cut(ptvb_data$PTVtsg_MAF, breaks = c(min(ptvb_data$PTVtsg_MAF, na.rm = T), 1, max(ptvb_data$PTVtsg_MAF, na.rm = T)), include.lowest = T, right = F)
+Table(ptvb_data$PTVtsg_MAF_g)
+
+#PTVpli_MAF
+ptvb_data$PTVpli_MAF_g = cut(ptvb_data$PTVpli_MAF, breaks = c(min(ptvb_data$PTVpli_MAF, na.rm = T), 1, max(ptvb_data$PTVpli_MAF, na.rm = T)), include.lowest = T, right = F)
+Table(ptvb_data$PTVpli_MAF_g)
+
+```
+
+#Add UKB data
+
+```{r}
+load("Objects/ukb_data_cancer_final")
+sum(Table(ukb_data_cancer$cancer_type))
+
+ukb_data = ukb_data_cancer[,c(1:23,45:84)]
+ukb_data %<>% left_join(ptvb_data, by = "eid")
+
+# #GPCA
+# gpca = fread("Objects/ukb_genetic_pca_40.tsv")
+# gpca %<>% dplyr::select(eid, UKB_column_name, value) %>% pivot_wider(id_cols = eid, names_from = UKB_column_name, values_from = value)
+# colnames(gpca) = gsub("22009-0.", "gpca", colnames(gpca))
+# gpca$eid = as.character(gpca$eid)
+# ukb_data %<>% left_join(gpca, by = "eid")
+
+saveRDS(ukb_data, file = "Objects/ukb_data.rds")
+```
+

@@ -8,39 +8,316 @@ output: html_document
 #Setup
 
 ```{r}
-Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "h2o", "Rfast", "tidycmprsk")
-#              , , "pbapply", "protr", , "future.apply", "networkD3", "ggpubr", "RColorBrewer", "Rfast", , "Biostrings", "ComplexHeatmap", "ggrepel")
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel")
+#"fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , "ggrepel")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
 ```
 
-
+#Incidence of tumors
+##Cox model separately by gender
 
 ```{r}
-setwd("D:/CloudStation/mygit/ukb_tumor/")
-load("objects/ukb_data_cancer_final")
-sum(Table(ukb_data_cancer$cancer_type))
+ukb_data = readRDS("Objects/ukb_data.rds")
 
-tempdf_x = subset(ukb_data_cancer, cancer_type == "Prostate")
-tempdf_x = dplyr::arrange(tempdf_x, diag_date)
-tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
-tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
-#gender_counts = table(tempdf_x$sex)
+ptvs = grep("_g", colnames(ukb_data), value = T)
+ptvs = grep("PTV", ptvs, value = T)
 
-tempdf_no_x = subset(ukb_data_cancer, cancer_type != "Prostate")
-tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
-tempdf_no_x %<>% mutate(inc_age = case_when(
-  death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
-  death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
-))
-unique_tempdf = rbind(tempdf_x, tempdf_no_x)
-rm(ukb_data_cancer, tempdf_no_x, tempdf_x)
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
 
-unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == "Prostate", 1, 0))
-#unique_tempdf$gender = as.factor(unique_tempdf$gender)
-gc()
-grayp_m = cuminc(Surv(inc_age, inc_event) ~ PTVtsg_MAF, data = unique_tempdf[unique_tempdf$sex == 1,])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
-      stat_m = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  filter(n >= 20)
+
+plan(multisession(workers = 12))
+i=0
+
+res = lapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tempdf = ukb_data %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  colnames(tempdf)[9] = "PTVg"
+  tumors_coxres = future_apply(tumor_freq_data, 1, function(t) {
+    tempdfG = tempdf %>% filter(sex == t[2])
+    tumorous = tempdfG %>% 
+      filter(cancer_type == t[1]) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric((diag_date - birthdate))) %>% 
+      mutate(inc_age = round(time/365.25))
+    nottumorous = tempdfG %>% 
+      filter(!eid %in% tumorous$eid) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = case_when(
+        death == T ~ as.numeric(date_of_death - birthdate),
+        death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+      )) %>% 
+      mutate(inc_age = round(time/365.25))
+    tempdfGU = bind_rows(tumorous, nottumorous)
+    tempdfGU$status = as.factor(ifelse(tempdfGU$cancer_type == t[1], 2, 1))
+
+    tempdfGU %<>% dplyr::select(eid, time, status, PTVg, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+    res.cox <- coxph(Surv(time, status) ~ PTVg + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfGU, id = tempdfGU$eid)
+    coxPvalues = summary(res.cox)$coefficients[,"Pr(>|z|)"]
+    coxCoefs = summary(res.cox)$coefficients[,"coef"]
+    names(coxPvalues)[grep("PTV", names(coxPvalues))] = "PTVg"
+    names(coxCoefs)[grep("PTV", names(coxCoefs))] = "PTVg"
+    coxPvalues = coxPvalues[fmatch(c("PTVg", paste0("gpca", 1:10)), names(coxPvalues))]
+    coxCoefs = coxCoefs[fmatch(c("PTVg", paste0("gpca", 1:10)), names(coxCoefs))]
+    names(coxPvalues) = paste0("p_", names(coxPvalues))
+    names(coxCoefs) = paste0("coef_", names(coxCoefs))
+    c(coxPvalues, coxCoefs)
+  })
+  out = cbind(tumor_freq_data, ptv_type = p, t(tumors_coxres))
+  out
+})
+rm(i)
+
+resdf = bind_rows(res)
+save(resdf, file = "Objects/res_cox_model_sepgender")
+
+##Heatmap
+load("Objects/res_cox_model_sepgender")
+resdf %<>% mutate(cancerSex = paste(cancer_type, sex, sep = "_"))
+
+cancerSexs = sort(unique(resdf$cancerSex))
+ptvs = unique(resdf$ptv_type)
+
+#Coefficients
+dataForHm = matrix(data = NA, nrow = length(ptvs), ncol = length(cancerSexs), dimnames = list(ptvs, cancerSexs))
+for(i in 1:nrow(dataForHm)) {
+  for(j in 1:ncol(dataForHm)) {
+    dataForHm[i,j] = ifelse(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHm)[i] & resdf$cancerSex == colnames(dataForHm)[j]] < 0.05, resdf$coef_PTVg[resdf$ptv_type == rownames(dataForHm)[i] & resdf$cancerSex == colnames(dataForHm)[j]], NA)
+  }
+}
+
+#P-values
+dataForHmP = matrix(data = NA, nrow = length(ptvs), ncol = length(cancerSexs), dimnames = list(ptvs, cancerSexs))
+for(i in 1:nrow(dataForHmP)) {
+  for(j in 1:ncol(dataForHmP)) {
+    dataForHmP[i,j] = ifelse(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHmP)[i] & resdf$cancerSex == colnames(dataForHmP)[j]] < 0.05, round(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHmP)[i] & resdf$cancerSex == colnames(dataForHmP)[j]], digits = 4), NA)
+  }
+}
+
+
+
+png(filename = "Plots/incidence_cox_analysis_1/heatmap_cox_model_sepgender.png", width = 40, height = 20, units = "cm", res = 300)
+hm = Heatmap(matrix = dataForHm, 
+             name = "Coefficient", 
+             na_col = "gray",
+             col = colorRamp2(c(-2, 0, 2), c("green", "white", "red")),
+             cluster_columns = F, 
+             cluster_rows = F, 
+             rect_gp = gpar(col = "black", lwd = 1), 
+             cell_fun = function(j, i, x, y, width, height, fill) {
+               if(!is.na(dataForHmP[i, j]))
+                 grid.text(sprintf("%.3f", dataForHmP[i, j]), x, y, gp = gpar(fontsize = 7))
+             })
+draw(hm)
+dev.off()
+
+```
+
+##Cox models with gender
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+
+ptvs = grep("_g", colnames(ukb_data), value = T)
+ptvs = grep("PTV", ptvs, value = T)
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  pivot_wider(id_cols = cancer_type, names_from = sex, values_from = n) %>% 
+  filter(female >= 50, male >= 50)
+
+plan(multisession(workers = 12))
+i=0
+
+res = lapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tempdf = ukb_data %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  colnames(tempdf)[9] = "PTVg"
+  tumors_coxres = future_sapply(tumor_freq_data$cancer_type, function(t) {
+    tumorous = tempdf %>% 
+      filter(cancer_type == t) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric((diag_date - birthdate))) %>% 
+      mutate(inc_age = round(time/365.25))
+    nottumorous = tempdf %>% 
+      filter(!eid %in% tumorous$eid) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = case_when(
+        death == T ~ as.numeric(date_of_death - birthdate),
+        death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+      )) %>% 
+      mutate(inc_age = round(time/365.25))
+    tempdfU = bind_rows(tumorous, nottumorous)
+    tempdfU$status = as.factor(ifelse(tempdfU$cancer_type == t, 2, 1))
+    tempdfU %<>% dplyr::select(eid, time, status, sex, PTVg, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+    res.cox <- coxph(Surv(time, status) ~ PTVg + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfU, id = tempdfU$eid)
+    coxPvalues = summary(res.cox)$coefficients[,"Pr(>|z|)"]
+    coxCoefs = summary(res.cox)$coefficients[,"coef"]
+    names(coxPvalues)[grep("PTV", names(coxPvalues))] = "PTVg"
+    names(coxCoefs)[grep("PTV", names(coxCoefs))] = "PTVg"
+    coxPvalues = coxPvalues[fmatch(c("PTVg", "sexmale", paste0("gpca", 1:10)), names(coxPvalues))]
+    coxCoefs = coxCoefs[fmatch(c("PTVg", "sexmale", paste0("gpca", 1:10)), names(coxCoefs))]
+    names(coxPvalues) = paste0("p_", names(coxPvalues))
+    names(coxCoefs) = paste0("coef_", names(coxCoefs))
+    c(coxPvalues, coxCoefs)
+  })
+  out = cbind(tumor_freq_data, ptv_type = p, t(tumors_coxres))
+  out
+})
+rm(i)
+
+resdf = bind_rows(res)
+save(resdf, file = "Objects/res_cox_model_withgender")
+
+##Heatmap
+load("Objects/res_cox_model_withgender")
+
+tumors = unique(resdf$cancer_type)
+ptvs = unique(resdf$ptv_type)
+
+#Coefficients
+dataForHm = matrix(data = NA, nrow = length(ptvs), ncol = length(tumors), dimnames = list(ptvs, tumors))
+for(i in 1:nrow(dataForHm)) {
+  for(j in 1:ncol(dataForHm)) {
+    dataForHm[i,j] = ifelse(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHm)[i] & resdf$cancer_type == colnames(dataForHm)[j]] < 0.05, resdf$coef_PTVg[resdf$ptv_type == rownames(dataForHm)[i] & resdf$cancer_type == colnames(dataForHm)[j]], NA)
+  }
+}
+
+#P-values
+dataForHmP = matrix(data = NA, nrow = length(ptvs), ncol = length(tumors), dimnames = list(ptvs, tumors))
+for(i in 1:nrow(dataForHmP)) {
+  for(j in 1:ncol(dataForHmP)) {
+    dataForHmP[i,j] = ifelse(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHmP)[i] & resdf$cancer_type == colnames(dataForHmP)[j]] < 0.05, round(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHmP)[i] & resdf$cancer_type == colnames(dataForHmP)[j]], digits = 4), NA)
+  }
+}
+
+png(filename = "Plots/incidence_cox_analysis_1/heatmap_cox_model_withgender.png", width = 30, height = 20, units = "cm", res = 300)
+hm = Heatmap(matrix = dataForHm, 
+             name = "Coefficient", 
+             na_col = "gray",
+             col = colorRamp2(c(-2, 0, 2), c("green", "white", "red")),
+             cluster_columns = F, 
+             cluster_rows = F, 
+             rect_gp = gpar(col = "black", lwd = 1), 
+             cell_fun = function(j, i, x, y, width, height, fill) {
+               if(!is.na(dataForHmP[i, j]))
+                 grid.text(sprintf("%.3f", dataForHmP[i, j]), x, y, gp = gpar(fontsize = 8))
+             })
+draw(hm)
+dev.off()
+
+```
+
+#Incidence of any tumor - Cox model
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+
+ptvs = grep("_g", colnames(ukb_data), value = T)
+ptvs = grep("PTV", ptvs, value = T)
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+i=0
+
+res = pbsapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tempdf = ukb_data %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  colnames(tempdf)[9] = "PTVg"
+  tumorous = tempdf %>% 
+    filter(cancer_type %in% tumors) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(inc_age = round(time/365.25))
+  nottumorous = tempdf %>% 
+    filter(!eid %in% tumorous$eid) %>% 
+    filter(cancer_type == "No_cancer") %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+    )) %>% 
+    mutate(inc_age = round(time/365.25))
+  tempdfU = bind_rows(tumorous, nottumorous)
+  tempdfU$status = as.factor(ifelse(tempdfU$cancer_type %in% tumors, 2, 1))
+  tempdfU %<>% dplyr::select(eid, time, status, PTVg, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  res.cox <- coxph(Surv(time, status) ~ PTVg + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfU, id = tempdfU$eid)
+  coxPvalues = summary(res.cox)$coefficients[,"Pr(>|z|)"]
+  coxCoefs = summary(res.cox)$coefficients[,"coef"]
+  names(coxPvalues)[grep("PTV", names(coxPvalues))] = "PTVg"
+  names(coxCoefs)[grep("PTV", names(coxCoefs))] = "PTVg"
+  coxPvalues = coxPvalues[fmatch(c("PTVg", "sexmale", paste0("gpca", 1:10)), names(coxPvalues))]
+  coxCoefs = coxCoefs[fmatch(c("PTVg", "sexmale", paste0("gpca", 1:10)), names(coxCoefs))]
+  names(coxPvalues) = paste0("p_", names(coxPvalues))
+  names(coxCoefs) = paste0("coef_", names(coxCoefs))
+  c(ptv_type = p, coxPvalues, coxCoefs)
+})
+rm(i)
+resdf = t(res)
+resdf = as.data.frame(resdf)
+resdf %<>% mutate_at(2:25, as.numeric)
+save(resdf, file = "Objects/res_cox_model_anytumor")
+
+#Forest plot
+pbsapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tempdf = ukb_data %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  colnames(tempdf)[9] = "PTVg"
+  tumorous = tempdf %>% 
+    filter(cancer_type %in% tumors) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(inc_age = round(time/365.25))
+  nottumorous = tempdf %>% 
+    filter(!eid %in% tumorous$eid) %>% 
+    filter(cancer_type == "No_cancer") %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+    )) %>% 
+    mutate(inc_age = round(time/365.25))
+  tempdfU = bind_rows(tumorous, nottumorous)
+  tempdfU$status = as.factor(ifelse(tempdfU$cancer_type %in% tumors, 2, 1))
+  tempdfU %<>% dplyr::select(eid, time, status, PTVg, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  res.cox <- coxph(Surv(time, status) ~ PTVg + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfU, id = tempdfU$eid)
+  fig = forest_model(model = res.cox)
+  ggsave(paste0("Plots/incidence_cox_analysis_1/cox_fp_anytumor_", p, ".jpg"), plot = fig, width = 40, height = 20, units = "cm", dpi = 150)
+})
+
+
 ```
 
