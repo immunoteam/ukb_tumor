@@ -8,7 +8,7 @@ output: html_document
 #Setup
 
 ```{r}
-setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/") #asd
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/") #asdf
 library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
 Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db")
 #"fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , "ggrepel")
