@@ -27,7 +27,7 @@ library(gt)
 library(gtsummary)
 options(dplyr.summarise.inform = F)
 library(devtools)
-
+library(pbapply)
 #if (!require("BiocManager", quietly = TRUE))
     #install.packages("BiocManager")
 
@@ -6343,25 +6343,10 @@ dev.off()
 
 
 #New dataset
-##Graycox
+##RUN THIS - Graycox
 ```{r}
 
-library(pbapply)
 
-#How to use it
-options(warn=-1)
-set.seed(1000) # to control output in simulatins for p-values below.
-
-rho1 <- 0.2; rho2 <- 10
-n <- 400
-beta=c(0.0,-0.1,-0.5,0.3)
-## beta1=c(0.0,-0.1); beta2=c(-0.5,0.3)
-dats = simul.cifs(n)
-dats <- simul.cifs(n,rho1,rho2,beta,rc=0.5,rate=7)
-dtable(dats,~status)
-
-#fg <- cifreg(Event(time,status)~Z1+Z2,data=dats,cause=1,propodds=NULL)
-#summary(fg)
 
 ukb_data = readRDS("objects/ukb_data.rds")
 ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
@@ -6432,8 +6417,15 @@ rm(i)
 gray_resdf = bind_rows(res)
 save(gray_resdf, file = "objects/res_gray_model_withgender")
 
+
+```
+
+###Heatmap
+```{r}
+
+
 ##Heatmap
-load("Objects/res_gray_model_withgender")
+load("objects/res_gray_model_withgender")
 
 tumors = unique(resdf$cancer_type)
 ptvs = unique(resdf$ptv_type)
