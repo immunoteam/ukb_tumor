@@ -1,0 +1,213 @@
+---
+title: "Cox models - incidence of tumors"
+author: "Balazs Koncz"
+date: "2024-10-08"
+output: html_document
+---
+
+Incidence of tumor
+I) Any tumor
+Predictors: sex, PTV (cont. or cat.), gpca1-10, frequent genes with PTV
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db", "ggrepel", "ggsci", "scales")
+#"fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , )
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+pal_npg("nrc")(9)
+scales::show_col(pal_npg("nrc")(9))
+pal_npg("nrc", alpha = 0.8)(9)
+scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+```
+
+#Cox models I.
+Predictors: sex, PTV (cont. or cat.), gpca1-10
+
+##Dataset
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes", ptvs)]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+nottumorous = ukb_data %>% 
+  #dplyr::filter(!eid %in% tumorous$eid) %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+intersect(tumorous$eid, nottumorous$eid)
+
+ukb_data = rbind(tumorous, nottumorous)
+
+```
+
+##Cox-models
+
+```{r}
+
+i=0
+pbsapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tempdf = ukb_data %>% 
+    dplyr::select(eid, sex, cancer_type, time, status, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  colnames(tempdf)[6] = "PTVvar"
+  tempdf %<>% dplyr::select(eid, time, status, PTVvar, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  res.cox <- coxph(Surv(time, status) ~ PTVvar + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdf, id = tempdf$eid)
+  fig = forest_model(model = res.cox)
+  ggsave(paste0("Plots/001/cox_fp_anytumor_", p, ".jpg"), plot = fig, width = 40, height = 20, units = "cm", dpi = 150)
+})
+
+#PTVtsg - more groups
+ukb_data$PTVtsg_MAF_g2 = cut(ukb_data$PTVtsg_MAF, breaks = c(0,1,2,3,max(ukb_data$PTVtsg_MAF)), include.lowest = T, right = F)
+Table(ukb_data$PTVtsg_MAF_g2)
+levels(ukb_data$PTVtsg_MAF_g2)
+tempdf = ukb_data %>% 
+  dplyr::select(eid, sex, cancer_type, time, status, PTVtsg_MAF_g2, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+res.cox <- coxph(Surv(time, status) ~ PTVtsg_MAF_g2 + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdf, id = tempdf$eid)
+fig = forest_model(model = res.cox)
+fig
+ggsave("Plots/001/cox_fp_anytumor_PTVtsg4Groups.jpg", plot = fig, width = 40, height = 20, units = "cm", dpi = 150)
+
+```
+
+#Cox models II.
+Predictors: sex, PTV (cont. or cat.), gpca1-10, frequent TSG with PTV
+##Dataset
+
+```{r}
+load("Objects/overrep_ft_tsgs_alltumors")
+
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ptvs = c("PTVtsg_MAF", "PTVtsg_MAF_g", "Genes_PTV_MAF")
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, Genes_PTV_MAF, PTVtsg_MAF, PTVtsg_MAF_g, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+nottumorous = ukb_data %>% 
+  #dplyr::filter(!eid %in% tumorous$eid) %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, Genes_PTV_MAF, PTVtsg_MAF, PTVtsg_MAF_g, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+intersect(tumorous$eid, nottumorous$eid)
+
+ukb_data = rbind(tumorous, nottumorous)
+
+mat = pbsapply(overrep_tsgs_ensg, function(genes) {
+  grepl(genes, ukb_data$Genes_PTV_MAF)
+})
+colnames(mat) = overrep_tsgs_hugo
+ukb_data = cbind(ukb_data, mat)
+
+```
+
+##Cox models and forest plots
+
+```{r}
+
+tempdf = ukb_data %>% dplyr::select(eid, time, status, PTVtsg_MAF, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, all_of(overrep_tsgs_hugo))
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+summary(res.cox)
+fig = forest_model(model = res.cox)
+ggsave("Plots/001/cox_fp_anytumor_PTVtsg_MAF_freqTSGs.jpg", plot = fig, width = 15, height = 25, units = "cm", dpi = 150)
+
+tempdf = ukb_data %>% dplyr::select(eid, time, status, PTVtsg_MAF_g, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, all_of(overrep_tsgs_hugo))
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+summary(res.cox)
+fig = forest_model(model = res.cox)
+ggsave("Plots/001/cox_fp_anytumor_PTVtsg_MAF_g_freqTSGs.jpg", plot = fig, width = 15, height = 25, units = "cm", dpi = 150)
+
+tempdf = ukb_data
+tempdf$PTVtsg_MAF_g2 = cut(tempdf$PTVtsg_MAF, breaks = c(0,1,2,max(tempdf$PTVtsg_MAF)), include.lowest = T, right = F)
+tempdf %<>%  dplyr::select(eid, time, status, PTVtsg_MAF_g2, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, all_of(overrep_tsgs_hugo))
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+summary(res.cox)
+fig = forest_model(model = res.cox)
+ggsave("Plots/001/cox_fp_anytumor_PTVtsg_MAF_3groups_freqTSGs.jpg", plot = fig, width = 20, height = 25, units = "cm", dpi = 150)
+
+
+#Exclude samples with PTVs in BRCA1, CDH1, MLH1, PALB2, MSH2, DNMT3A" "APC, BARD1, BRCA2, ATM, BAP1, TET2, ASXL1, CHEK2
+tempdf = ukb_data %>% 
+  filter(!(BRCA1 == T|CDH1 == T|MLH1 == T|PALB2 == T|MSH2 == T|DNMT3A == T|APC == T|BARD1 == T|BRCA2 == T|ATM == T|BAP1 == T|TET2 == T|ASXL1 == T|CHEK2 == T)) %>% 
+  dplyr::select(eid, time, status, PTVtsg_MAF, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+summary(res.cox)
+fig = forest_model(model = res.cox)
+ggsave("Plots/001/cox_fp_anytumor_PTVtsg_MAF_freqTSGs_filtered.jpg", plot = fig, width = 15, height = 25, units = "cm", dpi = 150)
+
+tempdf = ukb_data %>% 
+  filter(!(BRCA1 == T|CDH1 == T|MLH1 == T|PALB2 == T|MSH2 == T|DNMT3A == T|APC == T|BARD1 == T|BRCA2 == T|ATM == T|BAP1 == T|TET2 == T|ASXL1 == T|CHEK2 == T)) %>% 
+  dplyr::select(eid, time, status, PTVtsg_MAF_g, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+summary(res.cox)
+fig = forest_model(model = res.cox)
+ggsave("Plots/001/cox_fp_anytumor_PTVtsg_MAF_g_freqTSGs_filtered.jpg", plot = fig, width = 15, height = 25, units = "cm", dpi = 150)
+
+tempdf = ukb_data
+tempdf$PTVtsg_MAF_g2 = cut(tempdf$PTVtsg_MAF, breaks = c(0,1,2,max(tempdf$PTVtsg_MAF)), include.lowest = T, right = F)
+tempdf %<>% 
+  filter(!(BRCA1 == T|CDH1 == T|MLH1 == T|PALB2 == T|MSH2 == T|DNMT3A == T|APC == T|BARD1 == T|BRCA2 == T|ATM == T|BAP1 == T|TET2 == T|ASXL1 == T|CHEK2 == T)) %>% 
+  dplyr::select(eid, time, status, PTVtsg_MAF_g2, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+summary(res.cox)
+fig = forest_model(model = res.cox)
+ggsave("Plots/001/cox_fp_anytumor_PTVtsg_MAF_3groups_freqTSGs_filtered.jpg", plot = fig, width = 20, height = 25, units = "cm", dpi = 150)
+
+
+```
+

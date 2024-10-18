@@ -1,0 +1,39 @@
+---
+title: "PTVs of tumor suppressor genes"
+output: html_document
+date: "2024-10-15"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr")
+#"fastmatch", "h2o", "protr", "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db", "ggrepel", "ggsci", "scales"
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+pal_npg("nrc")(9)
+scales::show_col(pal_npg("nrc")(9))
+pal_npg("nrc", alpha = 0.8)(9)
+scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+```
+
+```{r}
+tsg = fread("Objects/tumor_supressor_genes_bioinfo_uth.txt")
+ukb_data = readRDS("Objects/ukb_data.rds")
+
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+freqGenesMAF = readRDS("Objects/FreqTSGPTVAnyTumor.rds")
+
+tsg %<>% left_join(freqGenesMAF, by = c("GeneSymbol" = "HUGO"))
+
+```
+

@@ -8,55 +8,355 @@ date: "2024-10-11"
 
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+Packages <- c("tidyverse", "magrittr", "org.Hs.eg.db", "clusterProfiler", "data.table", "future.apply", "Rfast", "fastmatch", "pbapply", "ggpubr")
+
 library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db")
-#"fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , "ggrepel")
+
+#, "h2o", , , "protr", , , "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , "ggrepel", , "tidycmprsk", , "survminer", "ggsurvfit", "fastmatch", , "ComplexHeatmap", , "forestmodel", , )
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
 ```
 
+#PTV gene frequencies
 
 ```{r}
 ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
 
-#genes_all = sort(unique(unlist(strsplit(ukb_data$Genes_PTV, ","), use.names = F)))
-genes_all = sort(unique(c(unlist(strsplit(ukb_data$Genes_PTV, ","), use.names = F), unlist(strsplit(ukb_data$Genes_PTV_MAF, ","), use.names = F))))
-gene_symbols = bitr(geneID = genes_all, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
-#genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+tsg = fread("Objects/tumor_supressor_genes_bioinfo_uth.txt")
+
+ukb_data_unique = ukb_data %>% 
+  dplyr::select(eid, Genes_PTV_MAF) %>% 
+  unique()
+
+genes_all = sort(unique(unlist(strsplit(ukb_data_unique$Genes_PTV_MAF, ","), use.names = F)))
+genesFreq = bitr(geneID = genes_all, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genesFreq$tsg = genesFreq$SYMBOL %in% tsg$GeneSymbol
+rm(genes_all)
+
+#All UKB
+temp = Table(unlist(lapply(ukb_data_unique$Genes_PTV_MAF, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_UKB = nrow(ukb_data_unique)
+genesFreq$allUKB = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+rm(temp, ukb_data_unique)
+
+#######
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+# v1 = ukb_data %>%
+#   filter(cancer_type == "No_cancer") %>%
+#   pull(eid)
+# v2 = ukb_data %>%
+#   filter(cancer_type %in% tumors) %>%
+#   pull(eid)
+# length(intersect(v1, v2)) #0
+
+#Not tumorous
+nottumorous = ukb_data %>% 
+  filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+
+temp = Table(unlist(lapply(nottumorous$Genes_PTV_MAF, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_notTumorous = nrow(nottumorous)
+genesFreq$notTumorous = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$notTumorous[is.na(genesFreq$notTumorous)] = 0
+rm(temp, nottumorous)
+
+#Tumorous
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(tumorous$Genes_PTV_MAF, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_tumorous = nrow(tumorous)
+genesFreq$tumorous = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+rm(temp, tumorous)
+genesFreq$tumorous[is.na(genesFreq$tumorous)] = 0
+
+
+#In tumors separately
+tumor_dfs = pblapply(tumors, function(t) {
+  ukb_data %>% 
+    filter(cancer_type == t) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T)
+})
+names(tumor_dfs) = tumors
+
+plan(multisession(workers = 8))
+tumor_freqmat = future_lapply(tumors, function(t) {
+  temp = Table(unlist(lapply(tumor_dfs[[t]]$Genes_PTV_MAF, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  temp2 = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+  temp2[is.na(temp2)] = 0
+  out = cbind(rep(nrow(tumor_dfs[[t]]), length(temp2)), temp2)
+  colnames(out) = c(paste0("n_", t), t)
+  out
+})
+tumor_freqmat2 = do.call(cbind, tumor_freqmat)
+genesFreq = cbind(genesFreq, tumor_freqmat2)
+
+saveRDS(genesFreq, file = "Objects/genesFreqMAF.rds")
+
+```
+
+
+
+med: 400, q3: 700 (Source: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-023-02973-2)
+MYO5A - 1,855 aas
+MUC19 - 8,384 aas
+RP1L1 - 2,400 aas
+TTN - 34,350 aas
+FLG - 4,061 aas
+OBSCN - 7,968 aas
+MUC16 - 14,507 aas
+ITGB1BP1 - 200 aas !
+ZNF90 - 601 aas
+
+
+
+#I. Overrepresented tsgs in all tumors - Fisher tests
+
+```{r}
+genesFreq = readRDS("Objects/genesFreqMAF.rds")
+genesFreq_TSG = genesFreq %>% filter(tsg==T)
+plan(multisession(workers = 8))
+ftpOR = t(future_apply(genesFreq_TSG, 1, function(x) {
+  ft = fisher.test(rbind(c(as.numeric(x[9]), as.numeric(x[7])), c(as.numeric(x[8])-as.numeric(x[9]), as.numeric(x[6])-as.numeric(x[7]))))
+  c(unname(ft$estimate), ft$p.value)
+}))
+ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+genesFreq_TSG = cbind(genesFreq_TSG[,1:9], ftpOR, genesFreq_TSG[,10:ncol(genesFreq_TSG)])
+
+overrep_tsgs_ensg = genesFreq_TSG %>% filter(Padj<0.05) %>% pull(ENSEMBL)
+overrep_tsgs_hugo = genesFreq_TSG %>% filter(Padj<0.05) %>% pull(SYMBOL)
+
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_tsgs_alltumors")
+
+```
+
+#II. Overrepresented TSGs by tumor types - Fisher tests
+
+```{r}
+genesFreq = readRDS("Objects/genesFreqMAF.rds")
+
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
 
 tumors = sort(unique(ukb_data$cancer_type))
 tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
 
-ptvGeneFreq = pblapply(tumors, function(t) {
-  tumorous = ukb_data %>% 
-    filter(cancer_type == t) %>% 
-    arrange(diag_date) %>% 
-    distinct(eid, .keep_all = T)
-  geneFreqs = Table(unlist(lapply(tumorous$Genes_PTV, function(g) {
-    unique(strsplit(g, ",")[[1]])
-  })))
-  freqGenes = geneFreqs[geneFreqs>nrow(tumorous)/100]
-  geneFreqsMAF = Table(unlist(lapply(tumorous$Genes_PTV_MAF, function(g) {
-    unique(strsplit(g, ",")[[1]])
-  })))
-  freqGenesMAF = geneFreqsMAF[geneFreqsMAF>nrow(tumorous)/100]
-  list(freqGenes = freqGenes, freqGenesMAF = freqGenesMAF)
+n_nottumorous = ukb_data %>% 
+  filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  nrow() #354,783
+
+tumor_patients_n = data.frame(cancer_type = tumors, 
+                              n_patients = unname(sapply(tumors, function(t) {
+                                ukb_data %>% 
+                                  filter(cancer_type == t) %>% 
+                                  arrange(diag_date) %>% 
+                                  distinct(eid, .keep_all = T) %>% 
+                                  nrow()
+                              })))
+
+genesFreq_TSG = genesFreq %>% filter(tsg==T)
+
+plan(multisession(workers = 8))
+overrep_genes_list = future_lapply(tumors, function(t) {
+  ind = fmatch(t, colnames(genesFreq_TSG))
+  n_tumorous = tumor_patients_n$n_patients[tumor_patients_n$cancer_type == t]
+  ftpOR = t(apply(genesFreq_TSG, 1, function(x) {
+    ft = fisher.test(rbind(c(as.numeric(x[ind]), as.numeric(x[5])), c(n_tumorous-as.numeric(x[ind]), n_nottumorous-as.numeric(x[5]))))
+    c(unname(ft$estimate), ft$p.value)
+  }))
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  cbind(genesFreq_TSG[,c("ENSEMBL", "SYMBOL", "allUKB", "notTumorous", "tumorous")], ftpOR)
 })
-names(ptvGeneFreq) = tumors
+names(overrep_genes_list) = tumors
+overrep_tsgs_ensg = lapply(tumors, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.05) %>% pull(ENSEMBL))
+names(overrep_tsgs_ensg) = tumors
+overrep_tsgs_hugo = lapply(tumors, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.05) %>% pull(SYMBOL))
+names(overrep_tsgs_hugo) = tumors
+lengths(overrep_tsgs_ensg)
 
-ptvGeneFreqDF = data.frame(tumor = tumors)
-ptvGeneFreqDF$nfreqGenes = unname(sapply(tumors, function(x) {length(ptvGeneFreq[[x]]$freqGenes)}))
-ptvGeneFreqDF$nfreqGenesMAF = unname(sapply(tumors, function(x) {length(ptvGeneFreq[[x]]$freqGenesMAF)}))
-
-ptvGeneFreqDF$freqGenesMAF_ENSG = unname(sapply(tumors, function(x) {paste(names(sort(ptvGeneFreq[[x]]$freqGenesMAF, decreasing = T)), collapse = ",")}))
-ptvGeneFreqDF$freqGenesMAF_HUGO = unname(sapply(ptvGeneFreqDF$freqGenesMAF_ENSG, function(x) paste(gene_symbols$SYMBOL[fmatch(strsplit(x, ",")[[1]], gene_symbols$ENSEMBL)], collapse = ",")))
-
-
-
-saveRDS(ptvGeneFreqDF, file = "Objects/ptvGeneFreqDF.rds")
-saveRDS(gene_symbols, file = "Objects/gene_symbols.rds")
-
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_tsgs_tumors")
 
 ```
+
+#III. Overrepresented TSGs by tumor types and gender - Fisher tests
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  filter(n >= 20)
+
+tsg = fread("Objects/tumor_supressor_genes_bioinfo_uth.txt")
+
+```
+
+
+
+#Compare the frequency of PTVs in TSG and other genes
+
+```{r}
+genesFreq = readRDS("Objects/genesFreqMAF.rds")
+
+genesFreq %<>% mutate(ratio_T_NT = tumorous/notTumorous)
+quantile(genesFreq$ratio_T_NT, na.rm = T)
+
+genesFreq %>% 
+  ggplot(aes(x = tsg, y = ratio_T_NT)) + 
+  geom_boxplot() + 
+  stat_compare_means() + 
+  scale_y_continuous(trans = "log2")
+
+genesFreq %>% 
+  filter(tumorous > 100) %>% 
+  ggplot(aes(x = tsg, y = ratio_T_NT)) + 
+  geom_boxplot() + 
+  stat_compare_means() + 
+  scale_y_continuous(trans = "log2")
+```
+
+#Overrepresented genes in different tumors
+
+```{r}
+genesFreq = readRDS("Objects/genesFreqMAF.rds")
+
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+n_nottumorous = ukb_data %>% 
+  filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  nrow() #354,783
+
+tumor_patients_n = data.frame(cancer_type = tumors, 
+                              n_patients = unname(sapply(tumors, function(t) {
+                                ukb_data %>% 
+                                  filter(cancer_type == t) %>% 
+                                  arrange(diag_date) %>% 
+                                  distinct(eid, .keep_all = T) %>% 
+                                  nrow()
+                              })))
+
+temp = sapply(tumors, function(t) {
+  genesFreq[,t]/tumor_patients_n$n_patients[tumor_patients_n$cancer_type == t]
+})
+colnames(temp) = paste0(tumors, "_R")
+notTumorous_R = genesFreq$notTumorous/n_nottumorous
+genesFreq = cbind(genesFreq, notTumorous_R, temp)
+rm(temp, notTumorous_R)
+
+temp = sapply(tumors, function(t) {
+  genesFreq[,paste0(t, "_R")] / genesFreq[,"notTumorous_R"]
+})
+colnames(temp) = paste0(tumors, "RPerNTR")
+genesFreq = cbind(genesFreq, temp)
+rm(temp)
+
+overrep_genes_tumors = lapply(tumors, function(t) {
+  tempdf = genesFreq[,c("ENSEMBL", "SYMBOL", t, paste0(t, "RPerNTR"))]
+  colnames(tempdf)[3:4] = c("Tumor", "TumorRPerNTR")
+  n1perc = round(tumor_patients_n$n_patients[tumor_patients_n$cancer_type == t]/1000)
+  tempdf %<>% filter(Tumor > n1perc)
+  ensgs = tempdf %>% arrange(desc(TumorRPerNTR)) %>% pull(ENSEMBL)
+  hugos = tempdf %>% arrange(desc(TumorRPerNTR)) %>% pull(SYMBOL)
+  ensgs = ensgs[1:30]
+  hugos = hugos[1:30]
+  list(ensgs[!is.na(ensgs)], hugos[!is.na(hugos)])
+  #rm(tempdf, ensgs, hugos, n1perc, t)
+})
+names(overrep_genes_tumors) = tumors
+
+saveRDS(overrep_genes_tumors, file = "Objects/overrep_genes_tumors.rds")
+
+#TSGs
+genesFreq_TSG = genesFreq %>% filter(tsg == T)
+
+overrep_tsgs_tumors = lapply(tumors, function(t) {
+  tempdf = genesFreq_TSG[,c("ENSEMBL", "SYMBOL", t, paste0(t, "RPerNTR"))]
+  colnames(tempdf)[3:4] = c("Tumor", "TumorRPerNTR")
+  n1perc = round(tumor_patients_n$n_patients[tumor_patients_n$cancer_type == t]/1000)
+  tempdf %<>% filter(Tumor > n1perc)
+  ensgs = tempdf %>% arrange(desc(TumorRPerNTR)) %>% pull(ENSEMBL)
+  hugos = tempdf %>% arrange(desc(TumorRPerNTR)) %>% pull(SYMBOL)
+  ensgs = ensgs[1:30]
+  hugos = hugos[1:30]
+  list(ensgs[!is.na(ensgs)], hugos[!is.na(hugos)])
+  #rm(tempdf, ensgs, hugos, n1perc, t)
+})
+names(overrep_tsgs_tumors) = tumors
+
+saveRDS(overrep_tsgs_tumors, file = "Objects/overrep_tsgs_tumors.rds")
+
+```
+
+#Overrepresented genes in all tumors - Fisher tests
+
+```{r}
+genesFreq = readRDS("Objects/genesFreqMAF.rds")
+
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+n_nottumorous = ukb_data %>% 
+  filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  nrow() #354,783
+
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+
+```
+
 
