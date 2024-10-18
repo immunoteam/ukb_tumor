@@ -1,0 +1,62 @@
+---
+title: "Collect frequent PTVs by tumors"
+output: html_document
+date: "2024-10-11"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db")
+#"fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , "ggrepel")
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+```
+
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+
+#genes_all = sort(unique(unlist(strsplit(ukb_data$Genes_PTV, ","), use.names = F)))
+genes_all = sort(unique(c(unlist(strsplit(ukb_data$Genes_PTV, ","), use.names = F), unlist(strsplit(ukb_data$Genes_PTV_MAF, ","), use.names = F))))
+gene_symbols = bitr(geneID = genes_all, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+#genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+ptvGeneFreq = pblapply(tumors, function(t) {
+  tumorous = ukb_data %>% 
+    filter(cancer_type == t) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T)
+  geneFreqs = Table(unlist(lapply(tumorous$Genes_PTV, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  freqGenes = geneFreqs[geneFreqs>nrow(tumorous)/100]
+  geneFreqsMAF = Table(unlist(lapply(tumorous$Genes_PTV_MAF, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  freqGenesMAF = geneFreqsMAF[geneFreqsMAF>nrow(tumorous)/100]
+  list(freqGenes = freqGenes, freqGenesMAF = freqGenesMAF)
+})
+names(ptvGeneFreq) = tumors
+
+ptvGeneFreqDF = data.frame(tumor = tumors)
+ptvGeneFreqDF$nfreqGenes = unname(sapply(tumors, function(x) {length(ptvGeneFreq[[x]]$freqGenes)}))
+ptvGeneFreqDF$nfreqGenesMAF = unname(sapply(tumors, function(x) {length(ptvGeneFreq[[x]]$freqGenesMAF)}))
+
+ptvGeneFreqDF$freqGenesMAF_ENSG = unname(sapply(tumors, function(x) {paste(names(sort(ptvGeneFreq[[x]]$freqGenesMAF, decreasing = T)), collapse = ",")}))
+ptvGeneFreqDF$freqGenesMAF_HUGO = unname(sapply(ptvGeneFreqDF$freqGenesMAF_ENSG, function(x) paste(gene_symbols$SYMBOL[fmatch(strsplit(x, ",")[[1]], gene_symbols$ENSEMBL)], collapse = ",")))
+
+
+
+saveRDS(ptvGeneFreqDF, file = "Objects/ptvGeneFreqDF.rds")
+saveRDS(gene_symbols, file = "Objects/gene_symbols.rds")
+
+
+```
+

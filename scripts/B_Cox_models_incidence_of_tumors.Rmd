@@ -8,9 +8,9 @@ output: html_document
 #Setup
 
 ```{r}
-setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/") #asdf
 library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel")
+Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db")
 #"fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", "RColorBrewer", "Biostrings", , "ggrepel")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
@@ -314,7 +314,7 @@ resdf = as.data.frame(resdf)
 resdf %<>% mutate_at(2:25, as.numeric)
 save(resdf, file = "Objects/res_cox_model_anytumor")
 
-#Forest plot
+#Generate Forest plots
 pbsapply(ptvs, function(p) {
   i=i+1
   .GlobalEnv$i = i
@@ -344,6 +344,111 @@ pbsapply(ptvs, function(p) {
   ggsave(paste0("Plots/incidence_cox_analysis_1/cox_fp_anytumor_", p, ".jpg"), plot = fig, width = 40, height = 20, units = "cm", dpi = 150)
 })
 
+
+```
+
+#Incidence of tumors II. - with frequent PTV_MAF genes
+##Cox model separately by gender
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ptvGeneFreqDF = readRDS("Objects/ptvGeneFreqDF.rds")
+ptvGeneFreqDF$tumor[ptvGeneFreqDF$tumor == "Brain/CNS"] = "Brain"
+ptvGeneFreqDF$tumor[ptvGeneFreqDF$tumor == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ptvGeneFreqDF$tumor[ptvGeneFreqDF$tumor == "Multiple myeloma"] = "MultipleMyeloma"
+ptvGeneFreqDF$tumor[ptvGeneFreqDF$tumor == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+
+#gene_symbols = readRDS("Objects/gene_symbols.rds")
+tumors = ptvGeneFreqDF$tumor
+
+ptvs = grep("_g", colnames(ukb_data), value = T)
+ptvs = grep("PTV", ptvs, value = T)
+ptvs = grep("_MAF", ptvs, value = T)
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  filter(n >= 20)
+
+nottumorous = ukb_data %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  dplyr::select(eid, sex, cancer_type, time, all_of(ptvs), Genes_PTV_MAF, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+tumorous = ukb_data %>% 
+  filter(cancer_type != "No_cancer") %>% 
+  mutate(time = as.numeric((diag_date - birthdate)))%>% 
+  dplyr::select(eid, sex, diag_date, cancer_type, time, all_of(ptvs), Genes_PTV_MAF, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+#sapply(ptvs, function(p) {dir.create(paste0("Plots/incidence_cox_analysis_2/", p))})
+
+i=0
+res = pblapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tumors_coxres = apply(tumor_freq_data, 1, function(t) {
+    tumor = tumorous %>%
+      filter(cancer_type == t[1]) %>% 
+      filter(sex == t[2]) %>%
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(status = 2) %>% 
+      dplyr::select(eid, sex, cancer_type, time, status, all_of(p), Genes_PTV_MAF, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+    control = nottumorous %>% 
+      filter(!eid %in% tumorous$eid) %>% 
+      filter(sex == t[2]) %>% 
+      mutate(status = 1) %>%
+      dplyr::select(eid, sex, cancer_type, time, status, all_of(p), Genes_PTV_MAF, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+    tempdfGU = bind_rows(tumor, control)
+    colnames(tempdfGU)[6] = "PTVg"
+    rm(control, tumor)
+    
+    #Frequent genes
+    tempgenes = strsplit(ptvGeneFreqDF$freqGenesMAF_ENSG[ptvGeneFreqDF$tumor == t[1]], ",")[[1]]
+    mat = sapply(tempgenes, function(tg) {
+      grepl(tg, tempdfGU$Genes_PTV_MAF)
+    })
+    tempdfGU = cbind(tempdfGU, mat)
+    l_tg = length(tempgenes)
+    tempdfGU = tempdfGU[,c(1,4,5,6,8:ncol(tempdfGU))]
+    
+    #COX
+    myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdfGU)[4:ncol(tempdfGU)], collapse = "+")))
+    res.cox <- coxph(myformula, data = tempdfGU, id = tempdfGU$eid)
+    summary(res.cox)
+    
+    #Forest plot
+    #fig = forest_model(model = res.cox)
+    #ggsave(paste0("Plots/incidence_cox_analysis_2/", p, "/cox_fp_", t[1], "_", t[2], ".jpg"), plot = fig, width = 40, height = 40, units = "cm", dpi = 150)
+    
+    #OUTPUT
+    c(summary(res.cox)$coefficients[1,"Pr(>|z|)"], summary(res.cox)$coefficients[1,"coef"], as.numeric(sapply(15:ncol(tempdfGU), function(y) c(fisher.test(table(tempdfGU$PTVg, tempdfGU[,y]))$p, unname(fisher.test(table(tempdfGU$PTVg, tempdfGU[,y]))$estimate)))))
+  })
+  m = max(lengths(tumors_coxres))
+  tumors_coxres = lapply(tumors_coxres, function(z) c(z, rep(NA, (40-length(z)))))
+  out = cbind(tumor_freq_data, ptv_type = p, do.call(rbind, tumors_coxres))
+  colnames(out)[5:6] = c("p_PTVg", "coef_PTVg")
+  out$p_PTVgAdj = p.adjust(out$p_PTVg, method = "BH")
+  out
+})
+rm(i)
+
+resdf = bind_rows(res)
+save(resdf, file = "Objects/res_cox_model_sepgender_freqPTVgenes")
+
+colnames(resdf)[seq(7,43,2)] = paste0("ensg_", 1:19, "_p")
+colnames(resdf)[seq(8,44,2)] = paste0("ensg_", 1:19, "_coef")
 
 ```
 
