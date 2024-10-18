@@ -888,6 +888,7 @@ tumor_inc_PTVuni = lapply(X = tumors, FUN = function(i){
   tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
   gender_counts = table(tempdf_x$gender)
   tempdf_no_x = subset(cuminc_table, cancer_type != i)
+  #kidobni az eid-kra 
   tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
   tempdf_no_x %<>% mutate(inc_age = case_when(
     death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
@@ -964,6 +965,8 @@ dev.off()
 #dev.off()
 
 ```
+
+
 
 ###Uni1 pvalues
 ```{r}
@@ -6280,16 +6283,40 @@ library(dendsort)
 
 #Matrix makeing for conf
 cuminc_hm_df_est = cuminc_pvals_df_all[,grepl("_est", colnames(cuminc_pvals_df_all))]
-cuminc_hm_df_est[cuminc_hm_df_est == "No_patient"] = NA
+cuminc_hm_df_est[cuminc_hm_df_est == "No data"] = NA
 cuminc_est_matrix_all = as.matrix(as.data.frame(lapply(cuminc_hm_df_est, as.numeric)))
 rownames(cuminc_est_matrix_all) = rownames(cuminc_hm_df_est)
 cuminc_est_matrix_all = cuminc_est_matrix_all[, colSums(is.na(cuminc_est_matrix_all)) == 0]
 
+#Matrix making for pvalues
+cuminc_hm_df_pval = cuminc_pvals_df_all[,grepl("_pvalue", colnames(cuminc_pvals_df_all))]
+cuminc_hm_df_pval[cuminc_hm_df_pval == "No data"] = NA
+cuminc_pval_matrix_all = as.matrix(as.data.frame(lapply(cuminc_hm_df_pval, as.numeric)))
+rownames(cuminc_pval_matrix_all) = rownames(cuminc_hm_df_pval)
+cuminc_pval_matrix_all = cuminc_pval_matrix_all[, colSums(is.na(cuminc_pval_matrix_all)) == 0]
 
-#Heatmap for conf
-col1 = colorRamp2(c(min(cuminc_est_matrix_all), max(cuminc_est_matrix_all)), c("blue","red"))
+cuminc_est_matrix_all[cuminc_pval_matrix_all > 0.05] = NA
+
+##Log pval mat
+#cuminc_pval_matrix_all[cuminc_pval_matrix_all == 0] = cuminc_pval_matrix_all[cuminc_pval_matrix_all == 0] + min(cuminc_pval_matrix_all)
+#cuminc_pvals_matrix_all_log = ifelse(cuminc_pval_matrix_all < 0, -log(abs(cuminc_pval_matrix_all)), log(cuminc_pval_matrix_all))
+
+#Create an empty matrix for stars
+star_matrix = matrix("", nrow = nrow(cuminc_pval_matrix_all), ncol = ncol(cuminc_pval_matrix_all))
+
+#Add stars based on p-value 
+star_matrix[cuminc_pval_matrix_all <= 0.05 & cuminc_pval_matrix_all > 0.01] <- "*"
+star_matrix[cuminc_pval_matrix_all <= 0.01 & cuminc_pval_matrix_all > 0.001] <- "**"
+star_matrix[cuminc_pval_matrix_all <= 0.001] <- "***"
+
+#Heatmap for coef.
+col1 = colorRamp2(c(0, 40), c("blue","red"))
 col_dend = dendsort(hclust(dist(t(cuminc_est_matrix_all))))
-pval = 
+pval = ifelse(is.na(cuminc_est_matrix_all), "", star_matrix)
+
+#with stars
+cuminc_hm_coef =  ComplexHeatmap::Heatmap(matrix = cuminc_est_matrix_all, name = "values", rect_gp = gpar(col = "white", lwd = 2), col = col1, cluster_rows = F, cluster_columns = F, cell_fun = function(j, i, x, y, width, height, fill) {grid.text(pval[i, j], x, y, gp = gpar(fontsize = 10))}, na_col = "grey")
+
 
 cuminc_heatmap_est = ComplexHeatmap::Heatmap(matrix = cuminc_est_matrix_all, col = col1, name = "values", rect_gp = gpar(col = "white", lwd = 2), cluster_rows = F, cluster_columns = col_dend, cell_fun = function(j, i, x, y, width, height, fill) {if(cuminc_est_matrix_all[i, j] > 0)grid.text(sprintf("%.1f", cuminc_est_matrix_all[i, j]), x, y, gp = gpar(fontsize = 10))})
 
@@ -6297,16 +6324,6 @@ pdf("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/cuminc
 print(cuminc_heatmap_est)
 dev.off()
 
-#Matrix making for pvalues
-cuminc_hm_df_pval = cuminc_pvals_df_all[,grepl("_pvalue", colnames(cuminc_pvals_df_all))]
-cuminc_hm_df_pval[cuminc_hm_df_pval == "No_patient"] = NA
-cuminc_pval_matrix_all = as.matrix(as.data.frame(lapply(cuminc_hm_df_pval, as.numeric)))
-rownames(cuminc_pval_matrix_all) = rownames(cuminc_hm_df_pval)
-cuminc_pval_matrix_all = cuminc_pval_matrix_all[, colSums(is.na(cuminc_pval_matrix_all)) == 0]
-
-##New mat
-cuminc_pval_matrix_all[cuminc_pval_matrix_all == 0] = cuminc_pval_matrix_all[cuminc_pval_matrix_all == 0] + min(cuminc_pval_matrix_all)
-cuminc_pvals_matrix_all_log = ifelse(cuminc_pval_matrix_all < 0, -log(abs(cuminc_pval_matrix_all)), log(cuminc_pval_matrix_all))
 
 #Heat for pvalue
 col2 = colorRamp2(c(min(cuminc_pvals_matrix_all_log), max(cuminc_pvals_matrix_all_log)), c("blue", "red"))
@@ -6320,6 +6337,136 @@ dev.off()
 
 png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/cuminc_heatmap.png", width = 100, height = 50, units = "cm", res = 300)
 print(cuminc_heatmap)
+dev.off()
+
+```
+
+
+#New dataset
+##Graycox
+```{r}
+
+library(pbapply)
+
+#How to use it
+options(warn=-1)
+set.seed(1000) # to control output in simulatins for p-values below.
+
+rho1 <- 0.2; rho2 <- 10
+n <- 400
+beta=c(0.0,-0.1,-0.5,0.3)
+## beta1=c(0.0,-0.1); beta2=c(-0.5,0.3)
+dats = simul.cifs(n)
+dats <- simul.cifs(n,rho1,rho2,beta,rc=0.5,rate=7)
+dtable(dats,~status)
+
+#fg <- cifreg(Event(time,status)~Z1+Z2,data=dats,cause=1,propodds=NULL)
+#summary(fg)
+
+ukb_data = readRDS("objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes_", ptvs)]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  pivot_wider(id_cols = cancer_type, names_from = sex, values_from = n) %>% 
+  filter(female >= 50, male >= 50)
+
+
+plan(multisession(workers = 4))
+
+tumors = tumor_freq_data$cancer_type
+tumorous_all = ukb_data %>% 
+      filter(cancer_type %in% tumors) %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+nottumorous_all = ukb_data %>% 
+      filter(cancer_type == "No_cancer") %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+i = 0
+
+res = future_lapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tumors_grayres = pbsapply(tumor_freq_data$cancer_type, function(t) {
+    tumorous = tumorous_all %>% 
+      filter(cancer_type == t) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric((diag_date - birthdate))) %>% 
+      mutate(inc_age = round(time/365.25))
+    nottumorous = nottumorous_all %>% 
+      filter(!eid %in% tumorous$eid) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = case_when(
+        death == T ~ as.numeric(date_of_death - birthdate),
+        death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+      )) %>% 
+      mutate(inc_age = round(time/365.25))
+    tempdfU = bind_rows(tumorous, nottumorous)
+    tempdfU$status = as.factor(ifelse(tempdfU$cancer_type == t, 1, 0))
+    tempdfU %<>% dplyr::select(eid, time, status, sex, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+    colnames(tempdfU)[5] = "PTVvar"
+    res.inc = crr(Surv(time, status) ~ PTVvar + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfU, id = tempdfU$eid)
+    as.numeric(rbind(res.inc$tidy$estimate, res.inc$tidy$p.value))
+  })
+  out = cbind(tumor_freq_data, ptv_type = p, t(tumors_grayres))
+  colnames(out)[seq(5,ncol(out),2)] = c("coef_PTVvar", "coef_sexmale", paste0("coef_gpca", 1:10))
+  colnames(out)[seq(6,ncol(out),2)] = c("p_PTVvar", "p_sexmale", paste0("p_gpca", 1:10))
+  out
+})
+rm(i)
+
+gray_resdf = bind_rows(res)
+save(gray_resdf, file = "objects/res_gray_model_withgender")
+
+##Heatmap
+load("Objects/res_gray_model_withgender")
+
+tumors = unique(resdf$cancer_type)
+ptvs = unique(resdf$ptv_type)
+
+#Coefficients
+dataForHm = matrix(data = NA, nrow = length(ptvs), ncol = length(tumors), dimnames = list(ptvs, tumors))
+for(i in 1:nrow(dataForHm)) {
+  for(j in 1:ncol(dataForHm)) {
+    dataForHm[i,j] = ifelse(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHm)[i] & resdf$cancer_type == colnames(dataForHm)[j]] < 0.05, resdf$coef_PTVg[resdf$ptv_type == rownames(dataForHm)[i] & resdf$cancer_type == colnames(dataForHm)[j]], NA)
+  }
+}
+
+#P-values
+dataForHmP = matrix(data = NA, nrow = length(ptvs), ncol = length(tumors), dimnames = list(ptvs, tumors))
+for(i in 1:nrow(dataForHmP)) {
+  for(j in 1:ncol(dataForHmP)) {
+    dataForHmP[i,j] = ifelse(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHmP)[i] & resdf$cancer_type == colnames(dataForHmP)[j]] < 0.05, round(resdf$p_PTVg[resdf$ptv_type == rownames(dataForHmP)[i] & resdf$cancer_type == colnames(dataForHmP)[j]], digits = 4), NA)
+  }
+}
+
+png(filename = "Plots/incidence_cox_analysis_1/heatmap_cox_model_withgender.png", width = 30, height = 20, units = "cm", res = 300)
+hm = Heatmap(matrix = dataForHm, 
+             name = "Coefficient", 
+             na_col = "gray",
+             col = colorRamp2(c(-2, 0, 2), c("green", "white", "red")),
+             cluster_columns = F, 
+             cluster_rows = F, 
+             rect_gp = gpar(col = "black", lwd = 1), 
+             cell_fun = function(j, i, x, y, width, height, fill) {
+               if(!is.na(dataForHmP[i, j]))
+                 grid.text(sprintf("%.3f", dataForHmP[i, j]), x, y, gp = gpar(fontsize = 8))
+             })
+draw(hm)
 dev.off()
 
 ```

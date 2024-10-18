@@ -650,12 +650,12 @@ q_all_MAF[c("10%", "90%")]
 
 #PTV group 0-90%
 ukb_data_cancer = ukb_data_cancer %>%
-  mutate(PTV_uni_MAF1 = cut(PTV_burden_raw, breaks = q_all_MAF[c("0%", "90%", "100%")], include.lowest = T)) %>% 
-  mutate(PTV_uni_MAF2 = cut(PTV_burden_raw, breaks = q_all_MAF[c("0%", "95%", "100%")], include.lowest = T))
+  mutate(PTV_uni_MAF1 = cut(PTV_burden_MAF, breaks = q_all_MAF[c("0%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTV_uni_MAF2 = cut(PTV_burden_MAF, breaks = q_all_MAF[c("0%", "95%", "100%")], include.lowest = T))
 
 cancer_data = cancer_data %>% 
-  mutate(PTV_uni_MAF1 = cut(PTV_burden_raw, breaks = q_all_MAF[c("0%", "90%", "100%")], include.lowest = T)) %>% 
-  mutate(PTV_uni_MAF2 = cut(PTV_burden_raw, breaks = q_all_MAF[c("0%", "95%", "100%")], include.lowest = T))
+  mutate(PTV_uni_MAF1 = cut(PTV_burden_MAF, breaks = q_all_MAF[c("0%", "90%", "100%")], include.lowest = T)) %>% 
+  mutate(PTV_uni_MAF2 = cut(PTV_burden_MAF, breaks = q_all_MAF[c("0%", "95%", "100%")], include.lowest = T))
 
 
 

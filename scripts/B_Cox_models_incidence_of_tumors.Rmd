@@ -17,11 +17,38 @@ rm(Packages)
 options(dplyr.summarise.inform = FALSE)
 ```
 
+#libraries
+```{r}
+library(ggpubr)
+library(fastmatch)
+library(readxl)
+library(forcats)
+library(survival)
+library(survminer)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(caret)
+library(tidyverse)
+library(future.apply)
+library(magrittr)
+library(tidycmprsk)
+library(ggsurvfit)
+library(patchwork)
+library(cowplot)
+library(gt)
+library(gtsummary)
+options(dplyr.summarise.inform = F)
+library(devtools)
+
+```
+
+
 #Incidence of tumors
 ##Cox model separately by gender
 
 ```{r}
-ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data = readRDS("objects/ukb_data.rds")
 
 ptvs = grep("_g", colnames(ukb_data), value = T)
 ptvs = grep("PTV", ptvs, value = T)
@@ -64,9 +91,8 @@ res = lapply(ptvs, function(p) {
       mutate(inc_age = round(time/365.25))
     tempdfGU = bind_rows(tumorous, nottumorous)
     tempdfGU$status = as.factor(ifelse(tempdfGU$cancer_type == t[1], 2, 1))
-
     tempdfGU %<>% dplyr::select(eid, time, status, PTVg, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
-    res.cox <- coxph(Surv(time, status) ~ PTVg + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfGU, id = tempdfGU$eid)
+    res.cox = coxph(Surv(time, status) ~ PTVg + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfGU, id = tempdfGU$eid)
     coxPvalues = summary(res.cox)$coefficients[,"Pr(>|z|)"]
     coxCoefs = summary(res.cox)$coefficients[,"coef"]
     names(coxPvalues)[grep("PTV", names(coxPvalues))] = "PTVg"
