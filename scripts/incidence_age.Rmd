@@ -837,8 +837,8 @@ ggsave(filename = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age in
 
 ```
 
-#Updated PTVs
-##Universal 1 cancer
+#PTVs 
+##MAF 90
 ```{r}
 #Load file
 load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
@@ -5701,12 +5701,24 @@ dev.off()
 
 ##All tumor cancer
 ```{r}
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 
-cuminc_table = ukb_data_cancer %>% select(eid, birthdate, sex, ethnic_group, attending_1, diag_date, date_of_death, death, cancer_type, hist_tumor_cat, PTV_burden, PTV_uni_groups_1, PTV_uni_groups_2, PTVim_groups_1, PTVim_groups_2, PTVpli_group_1, PTVpli_group_2, PTVtsg_group_1, PTVtsg_group_2)
+ukb_data = readRDS("objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes_", ptvs)]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+cuminc_table = ukb_data %>% select(eid, birthdate, sex, ethnic_group, attending_1, diag_date, date_of_death, death, cancer_type, hist_tumor_cat, PTV, PTV_g95, PTV_MAF_g95, PTVtsg_g95, PTVtsg_MAF_g, PTVim_g95, PTVim_MAF_g)
 
 
-rm(ukb_data_cancer)
+rm(ukb_data)
 cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
 cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
 cuminc_table = cuminc_table[cuminc_table$cancer_type != "Hydatidiform_mole", ]
@@ -5729,17 +5741,17 @@ no_tumor %<>% mutate(time = case_when(
 cuminc_table = rbind(has_tumor, no_tumor)
 cuminc_table$event = ifelse(cuminc_table$cancer_type == "No_cancer", 0, 1)
 
-cuminc_table$gender = as.factor(cuminc_table$gender)
+cuminc_table$sex = as.factor(cuminc_table$sex)
 cuminc_table$event = as.factor(cuminc_table$event)
-grayp_f = tidycmprsk::cuminc(Surv(time, event) ~ PTVpli_group_1, data = cuminc_table[cuminc_table$gender == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6) 
-grayp_m = tidycmprsk::cuminc(Surv(time, event) ~ PTVpli_group_1, data = cuminc_table[cuminc_table$gender == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
-inc_obj =  cuminc(Surv(time, event) ~ PTVpli_group_1 + gender, data = cuminc_table)
+grayp_f = tidycmprsk::cuminc(Surv(time, event) ~ PTVtsg_MAF_g, data = cuminc_table[cuminc_table$sex == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6) 
+grayp_m = tidycmprsk::cuminc(Surv(time, event) ~ PTVtsg_MAF_g, data = cuminc_table[cuminc_table$sex == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+inc_obj =  cuminc(Surv(time, event) ~ PTVtsg_MAF_g + sex, data = cuminc_table)
 inc_plot = ggcuminc(x = inc_obj) +
   add_confidence_interval() +
   scale_ggsurvfit() +
   annotate(geom = "text", label = paste0("\nfemale: p = ", grayp_f, ", male: p = ", grayp_m), x = 10, y = Inf ) +
   xlab("Time (years)") +
-  ggtitle("Cumulative incedence for all tumor (PTVpli) \n(90% cutoff) ") +
+  ggtitle("Cumulative incedence for all tumor (PTVtsg)") +
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
         legend.position = "right")
 plot_build <- ggplot_build(inc_plot)
@@ -5752,7 +5764,7 @@ color_mapping <- setNames(base_colors[1:length(labels)], labels)
 inc_plot <- inc_plot +
   scale_color_manual(values = color_mapping) +
   scale_fill_manual(values = color_mapping)
-inc_table = tbl_cuminc(x = cuminc(Surv(time, event) ~  PTVpli_group_1 + gender, data = cuminc_table), label_header = "**{time} year**",times = c(30, 40, 50, 60, 70, 80)) %>% 
+inc_table = tbl_cuminc(x = cuminc(Surv(time, event) ~  PTVtsg_MAF_g + sex, data = cuminc_table), label_header = "**{time} year**",times = c(30, 40, 50, 60, 70, 80)) %>% 
   add_nevent(location = c("label", "level")) %>% 
   add_n(location = c("label", "level")) %>% 
   add_p() %>%
@@ -5767,13 +5779,13 @@ fin_plot = grid.arrange(inc_plot, inc_table_grob, layout_matrix = rbind(c(1, 1),
 
 #ggsave("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg1_can_all.png", fin_plot, width = 50, height = 50, units = "cm", limitsize = F, dpi = 300)
 
-pdf("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVpli1_can_all.pdf", height = 10, width = 16)
+pdf("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg95_maf.pdf", height = 10, width = 16)
 grid.draw(fin_plot)
 dev.off()
 
-#png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTV_can_all.png", width = 100, height = 100, units = "cm", res = 300)
-#print(fin_plot)
-#dev.off()
+png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg95_raw.png", width = 16, height = 10, units = "in", res = 300)
+print(fin_plot)
+dev.off()
 
 #png("C:/Users/bagil/Desktop/MyGit/ukb_tumor/plots/Incidence/Age incidence/PTVtsg_can_all.png", width = 10, height = 8, units = "in", res = 300)
 #grid.arrange(inc_plot, inc_table_grob, layout_matrix = rbind(c(1, 1), c(1, 1), c(2, 2), c(2, 2)))
