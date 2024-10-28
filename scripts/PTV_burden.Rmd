@@ -9,7 +9,7 @@ output: html_document
 
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
-Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "ggplot2", "pbapply", "clusterProfiler", "org.Hs.eg.db", "Rfast")
+Packages <- c("tidyverse", "data.table", "magrittr", "fastmatch", "ggplot2", "pbapply", "clusterProfiler", "org.Hs.eg.db", "Rfast", "future.apply")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
@@ -250,5 +250,23 @@ ukb_data %<>% left_join(ptvb_data, by = "eid")
 # ukb_data %<>% left_join(gpca, by = "eid")
 
 saveRDS(ukb_data, file = "Objects/ukb_data.rds")
+```
+
+#MAF from UKB
+
+```{r}
+#Load PTV burden data
+ptvb = fread("PTVvars/PTVburden_without_MAF-001/PTVburden_without_MAF-001.tsv")
+plan(multisession(workers = 4))
+ptv_freq = Table(unlist(future_lapply(ptvb$Variants, function(x) strsplit(x, ",")[[1]]), use.names = F))
+m = round(nrow(ptvb)/10000)
+gc()
+
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
 ```
 

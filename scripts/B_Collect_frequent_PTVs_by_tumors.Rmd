@@ -202,9 +202,13 @@ save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_tsgs_tumor
 
 ```
 
-#III. Overrepresented TSGs by tumor types and gender - Fisher tests
+#III. By tumor types and gender
+##Gene frequencies
 
 ```{r}
+genesFreq = readRDS("Objects/genesFreqMAF.rds")
+genesFreq %<>% select(ENSEMBL, SYMBOL, tsg, n_UKB, allUKB, n_notTumorous, notTumorous, n_tumorous, tumorous)
+
 ukb_data = readRDS("Objects/ukb_data.rds")
 ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
 ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
@@ -215,13 +219,71 @@ ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"
 tumors = sort(unique(ukb_data$cancer_type))
 tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
 
-tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
-  set_colnames(c("cancer_type", "sex", "n")) %>% 
-  mutate_if(is.factor, as.character) %>% 
-  filter(cancer_type %in% tumors) %>% 
-  filter(n >= 20)
+tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    nrow()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n")
 
-tsg = fread("Objects/tumor_supressor_genes_bioinfo_uth.txt")
+temp = sapply(tumor_freq_data$n, function(x) rep(x, nrow(genesFreq)))
+colnames(temp) = paste0("n_", tumor_freq_data$TS)
+genesFreq = cbind(genesFreq, temp)
+
+ts_freqmat = apply(tumor_freq_data, 1, function(x) {
+  genes = ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    select(Genes_PTV_MAF)
+  tempENSGfreq = Table(unlist(lapply(genes$Genes_PTV_MAF, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  tempENSGfreq2 = unname(tempENSGfreq[fmatch(genesFreq$ENSEMBL, names(tempENSGfreq))])
+  tempENSGfreq2[is.na(tempENSGfreq2)] = 0
+  tempENSGfreq2
+})
+colnames(ts_freqmat) = tumor_freq_data$TS
+genesFreq = cbind(genesFreq, ts_freqmat)
+
+saveRDS(genesFreq, file = "Objects/genesFreqMAF_TS.rds")
+
+```
+
+##Overrepresented TSGs - Fisher tests
+
+```{r}
+genesFreq = readRDS("Objects/genesFreqMAF_TS.rds")
+
+genesFreq_TSG = genesFreq %>% filter(tsg==T)
+ts = colnames(genesFreq_TSG)[52:ncol(genesFreq_TSG)]
+n_nottumorous = genesFreq_TSG$n_notTumorous[1]
+
+plan(multisession(workers = 12))
+overrep_genes_list = future_lapply(ts, function(t) {
+  ind = fmatch(t, colnames(genesFreq_TSG))
+  n_tumorous = genesFreq_TSG[1,paste0("n_", t)]
+  ftpOR = t(apply(genesFreq_TSG, 1, function(x) {
+    ft = fisher.test(rbind(c(as.numeric(x[ind]), as.numeric(x[7])), c(n_tumorous - as.numeric(x[ind]), n_nottumorous - as.numeric(x[7]))))
+    c(unname(ft$estimate), ft$p.value)
+  }))
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  cbind(genesFreq_TSG[,c("ENSEMBL", "SYMBOL", "allUKB", "notTumorous", "tumorous")], ftpOR)
+})
+names(overrep_genes_list) = ts
+
+overrep_tsgs_ensg = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.1) %>% pull(ENSEMBL))
+names(overrep_tsgs_ensg) = ts
+overrep_tsgs_hugo = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.1) %>% pull(SYMBOL))
+names(overrep_tsgs_hugo) = ts
+lengths(overrep_tsgs_ensg)
+
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_tsgs_TS01")
 
 ```
 
