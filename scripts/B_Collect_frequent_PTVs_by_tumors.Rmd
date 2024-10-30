@@ -113,8 +113,6 @@ saveRDS(genesFreq, file = "Objects/genesFreqMAF.rds")
 
 ```
 
-
-
 med: 400, q3: 700 (Source: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-023-02973-2)
 MYO5A - 1,855 aas
 MUC19 - 8,384 aas
@@ -144,7 +142,13 @@ genesFreq_TSG = cbind(genesFreq_TSG[,1:9], ftpOR, genesFreq_TSG[,10:ncol(genesFr
 overrep_tsgs_ensg = genesFreq_TSG %>% filter(Padj<0.05) %>% pull(ENSEMBL)
 overrep_tsgs_hugo = genesFreq_TSG %>% filter(Padj<0.05) %>% pull(SYMBOL)
 
-save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_tsgs_alltumors")
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_005_tsgs_alltumors")
+
+overrep_tsgs_ensg = genesFreq_TSG %>% filter(Padj<0.1) %>% pull(ENSEMBL)
+overrep_tsgs_hugo = genesFreq_TSG %>% filter(Padj<0.1) %>% pull(SYMBOL)
+
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_01_tsgs_alltumors")
+
 
 ```
 
@@ -185,20 +189,30 @@ overrep_genes_list = future_lapply(tumors, function(t) {
   ind = fmatch(t, colnames(genesFreq_TSG))
   n_tumorous = tumor_patients_n$n_patients[tumor_patients_n$cancer_type == t]
   ftpOR = t(apply(genesFreq_TSG, 1, function(x) {
-    ft = fisher.test(rbind(c(as.numeric(x[ind]), as.numeric(x[5])), c(n_tumorous-as.numeric(x[ind]), n_nottumorous-as.numeric(x[5]))))
+    ft = fisher.test(rbind(c(as.numeric(x[ind]), as.numeric(x[7])), c(n_tumorous-as.numeric(x[ind]), n_nottumorous-as.numeric(x[7]))))
     c(unname(ft$estimate), ft$p.value)
   }))
   ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(Padj = p.adjust(p = P, method = "BH"))
   cbind(genesFreq_TSG[,c("ENSEMBL", "SYMBOL", "allUKB", "notTumorous", "tumorous")], ftpOR)
 })
 names(overrep_genes_list) = tumors
+
+
+#0.05
 overrep_tsgs_ensg = lapply(tumors, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.05) %>% pull(ENSEMBL))
 names(overrep_tsgs_ensg) = tumors
 overrep_tsgs_hugo = lapply(tumors, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.05) %>% pull(SYMBOL))
 names(overrep_tsgs_hugo) = tumors
 lengths(overrep_tsgs_ensg)
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_005_tsgs_tumors")
 
-save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_tsgs_tumors")
+#0.1
+overrep_tsgs_ensg = lapply(tumors, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.1) %>% pull(ENSEMBL))
+names(overrep_tsgs_ensg) = tumors
+overrep_tsgs_hugo = lapply(tumors, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.1) %>% pull(SYMBOL))
+names(overrep_tsgs_hugo) = tumors
+lengths(overrep_tsgs_ensg)
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_01_tsgs_tumors")
 
 ```
 
@@ -277,13 +291,21 @@ overrep_genes_list = future_lapply(ts, function(t) {
 })
 names(overrep_genes_list) = ts
 
+#0.05
+overrep_tsgs_ensg = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.05) %>% pull(ENSEMBL))
+names(overrep_tsgs_ensg) = ts
+overrep_tsgs_hugo = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.05) %>% pull(SYMBOL))
+names(overrep_tsgs_hugo) = ts
+lengths(overrep_tsgs_ensg)
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_005_tsgs_TS")
+
+#0.1
 overrep_tsgs_ensg = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.1) %>% pull(ENSEMBL))
 names(overrep_tsgs_ensg) = ts
 overrep_tsgs_hugo = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.1) %>% pull(SYMBOL))
 names(overrep_tsgs_hugo) = ts
 lengths(overrep_tsgs_ensg)
-
-save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_tsgs_TS01")
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_01_tsgs_TS")
 
 ```
 
