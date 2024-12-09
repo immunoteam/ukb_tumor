@@ -15,16 +15,14 @@ lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
 
-pal_npg("nrc")(9)
-scales::show_col(pal_npg("nrc")(9))
-pal_npg("nrc", alpha = 0.8)(9)
-scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+# pal_npg("nrc")(9)
+# scales::show_col(pal_npg("nrc")(9))
+# pal_npg("nrc", alpha = 0.8)(9)
+# scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
 ```
 
-#Cox models I.
+#I. Any kind of tumor (CM I.)
 Predictors: sex, PTV (cont. or cat.), gpca1-10
-
-##Dataset
 
 ```{r}
 ukb_data = readRDS("Objects/ukb_data.rds")
@@ -35,6 +33,7 @@ ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgk
 ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
 
 ukb_data %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
 
 load("Objects/ptvb_antproc")
 ukb_data %<>% left_join(ptvb_antproc, by = c("eid" = "Patient.ID"))
@@ -68,17 +67,11 @@ intersect(tumorous$eid, nottumorous$eid)
 
 ukb_data = rbind(tumorous, nottumorous)
 
-```
-
-##Cox-models
-
-```{r}
 pbsapply(ptvs, function(p) {
   tempdf = ukb_data %>% 
     dplyr::select(eid, sex, cancer_type, time, status, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
   colnames(tempdf)[6] = "PTV_app"
   tempdf$PTV_appG = as.factor(ifelse(tempdf$PTV_app == 0, 0, 1))
-  tempdf %<>% dplyr::select(eid, time, status, PTV_appG, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
   res.cox <- coxph(Surv(time, status) ~ PTV_appG + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdf, id = tempdf$eid)
   fig = forest_model(model = res.cox)
   ggsave(paste0("Plots/006/Cox_1/cox_fp_anytumor_", p, ".jpg"), plot = fig, width = 30, height = 20, units = "cm", dpi = 150)
@@ -93,9 +86,10 @@ pbsapply(ptvs, function(p) {
 # fig
 # #ggsave("Plots/006/Cox_1/cox_fp_anytumor_3groups.jpg", plot = fig, width = 40, height = 20, units = "cm", dpi = 150)
 
+
 ```
 
-#In tumors separately
+#II. In tumors separately
 ##Dataset
 
 ```{r}
@@ -107,6 +101,7 @@ ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgk
 ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
 
 ukb_data %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
 
 load("Objects/ptvb_antproc")
 ukb_data %<>% left_join(ptvb_antproc, by = c("eid" = "Patient.ID"))
@@ -141,8 +136,7 @@ tumorous_all = ukb_data %>%
 
 ```
 
-##Cox models
-
+##Cox models (CM II.)
 
 ```{r}
 sapply(tumors, function(x) dir.create(paste0("Plots/006/Cox_2/", x, "/")))
@@ -254,12 +248,9 @@ fig = resdf %>%
   theme_classic()
 fig
 ggsave(filename = "Plots/006/volcano_cox_tumors_antigen_processing_all.jpg", plot = fig, width = 25, height = 25, units = "cm", dpi = 300)
-
-
 ```
 
-
-#Genes with PTV associated with tumors, Fisher test
+#III. Genes with PTV associated with tumors, Fisher test
 
 ```{r}
 load("Objects/go_desc_df_ant_proc")
@@ -322,6 +313,149 @@ tumor_fishers %>%
   geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
   geom_label_repel() + 
   facet_wrap(~cancer_type)
+
+```
+
+#IV. Hot tumors (CM III.)
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ukb_data %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
+
+load("Objects/ptvb_antproc")
+ukb_data %<>% left_join(ptvb_antproc, by = c("eid" = "Patient.ID"))
+rm(ptvb_antproc)
+
+ptvs = grep("antigen", colnames(ukb_data), value = T)
+
+tumors = c("Melanoma", "Lung", "Bladder", "Kidney", "Liver")
+
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+nottumorous = ukb_data %>% 
+  #dplyr::filter(!eid %in% tumorous$eid) %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+intersect(tumorous$eid, nottumorous$eid)
+
+ukb_data = rbind(tumorous, nottumorous)
+
+pbsapply(ptvs, function(p) {
+  tempdf = ukb_data %>% 
+    dplyr::select(eid, sex, cancer_type, time, status, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  colnames(tempdf)[6] = "PTV_app"
+  tempdf$PTV_appG = as.factor(ifelse(tempdf$PTV_app == 0, 0, 1))
+  tempdf %<>% dplyr::select(eid, time, status, PTV_appG, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  res.cox <- coxph(Surv(time, status) ~ PTV_appG + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdf, id = tempdf$eid)
+  fig = forest_model(model = res.cox)
+  ggsave(paste0("Plots/006/Cox_3/cox_fp_hottumors_", p, ".jpg"), plot = fig, width = 30, height = 20, units = "cm", dpi = 150)
+})
+
+```
+
+#V. Gender-tumor pairs
+##Dataset
+
+```{r}
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ukb_data %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
+
+load("Objects/ptvb_antproc")
+ukb_data %<>% left_join(ptvb_antproc, by = c("eid" = "Patient.ID"))
+
+ptvs = grep("antigen", colnames(ukb_data), value = T)
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    nrow()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n")
+
+nottumorous_all = ukb_data %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1)
+
+tumorous_all = ukb_data %>% 
+  dplyr::filter(cancer_type %in% tumors) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2)
+
+rm(tumors)
+```
+
+##Cox models (CM IV.)
+
+```{r}
+sapply(tumor_freq_data$TS, function(x) dir.create(paste0("Plots/006/Cox_4/", x, "/")))
+
+res = pblapply(ptvs, function(p) {
+  tumors_coxres = pbapply(tumor_freq_data, 1, function(ts) {
+    tumorous = tumorous_all %>% 
+      filter(cancer_type == ts[1], sex == ts[2]) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T)
+    nottumorous = nottumorous_all %>% filter(sex == ts[2])
+    tempdfU = bind_rows(tumorous, nottumorous)
+    colnames(tempdfU)[fmatch(p, colnames(tempdfU))] = "PTV_app"
+    if(length(table(tumorous[,p])) == 1) {
+      o = rep(NA, 24)
+    } else {
+      tempdfU$PTV_appG = as.factor(ifelse(tempdfU$PTV_app == 0, 0, 1))
+      tempdfU %<>% dplyr::select(eid, time, status, PTV_appG, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+      res.cox <- coxph(Surv(time, status) ~ PTV_appG + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfU, id = tempdfU$eid)
+      fig = forest_model(model = res.cox)
+      ggsave(paste0("Plots/006/Cox_4/", ts[3], "/cox_fp_", p, "_", ts[3], ".jpg"), plot = fig, width = 30, height = 20, units = "cm", dpi = 150)
+      o = as.numeric(rbind(summary(res.cox)$coefficients[,"coef"], summary(res.cox)$coefficients[,"Pr(>|z|)"]))
+    }
+    o
+  })
+  out = cbind(tumor_freq_data, ptv_type = p, t(tumors_coxres))
+  colnames(out)[seq(5,ncol(out),2)] = c("coef_PTV_appG", "coef_sexmale", paste0("coef_gpca", 1:10))
+  colnames(out)[seq(6,ncol(out),2)] = c("p_PTV_appG", "p_sexmale", paste0("p_gpca", 1:10))
+  out$pcor_PTV_appG = p.adjust(out$p_PTV_appG, method = "BH")
+  out
+})
 
 ```
 

@@ -151,9 +151,13 @@ dev.off()
 
 #Cox model II.
 Control for frequent PTV affected TSGs
+DeBoever Medical relevance of protein-truncating variants across 337,205 individuals in the UK Biobank study: 
+Breast: PALB2
+Lung: BRCA2, FANCM - male: BRCA2 has an impact on the result 
+
 
 ```{r}
-load("Objects/overrep_ft_tsgs_TS01")
+load("Objects/overrep_ft_01_tsgs_TS")
 ptvs = grep("MAF", ptvs, value = T)
 
 i=0
@@ -246,6 +250,55 @@ draw(hm)
 dev.off()
 
 ```
+
+##Volcano plot
+
+```{r}
+load("Res/003/res_cox_model_sepgender_freqtsgs")
+resdf %<>% mutate(hr_PTVvar = exp(coef_PTVvar))
+resdf$sex[resdf$sex == "female"] = "Female"
+resdf$sex[resdf$sex == "male"] = "Male"
+resdf$cancer_type[resdf$cancer_type == "Bladder"] = "Bladder c."
+resdf$cancer_type[resdf$cancer_type == "Brain"] = "Brain c."
+resdf$cancer_type[resdf$cancer_type == "Breast"] = "Breast c."
+resdf$cancer_type[resdf$cancer_type == "Cervix"] = "Cervical c."
+resdf$cancer_type[resdf$cancer_type == "Colon"] = "Colorectal c."
+resdf$cancer_type[resdf$cancer_type == "Endometrium"] = "Endometrial c."
+resdf$cancer_type[resdf$cancer_type == "Esophagus"] = "Esophageal c."
+resdf$cancer_type[resdf$cancer_type == "HodgkinLymphoma"] = "Hodgkin lymphoma"
+resdf$cancer_type[resdf$cancer_type == "Kidney"] = "Kidney c."
+resdf$cancer_type[resdf$cancer_type == "Liver"] = "Liver c."
+resdf$cancer_type[resdf$cancer_type == "Lung"] = "Lung c."
+resdf$cancer_type[resdf$cancer_type == "MultipleMyeloma"] = "Multiple Myeloma"
+resdf$cancer_type[resdf$cancer_type == "NonHodgkinLymphoma"] = "Non-Hodgkin lymphoma"
+resdf$cancer_type[resdf$cancer_type == "Oral"] = "Oral c."
+resdf$cancer_type[resdf$cancer_type == "Ovary"] = "Ovarian c."
+resdf$cancer_type[resdf$cancer_type == "Pancreas"] = "Pancreatic c."
+resdf$cancer_type[resdf$cancer_type == "Rectum"] = "Rectal c."
+resdf$cancer_type[resdf$cancer_type == "Stomach"] = "Stomach c."
+resdf$cancer_type[resdf$cancer_type == "Thyroid"] = "Thyroid c."
+resdf$cancer_type[resdf$cancer_type == "Larynx"] = "Laryngeal c."
+resdf$cancer_type[resdf$cancer_type == "Prostate"] = "Prostate c."
+resdf$cancer_type[resdf$cancer_type == "Testis"] = "Testicular c."
+
+resdf %>% 
+  filter(ptv_type == "PTVtsg_MAF_g") %>% 
+  transform(TS = gsub("_", " ", TS)) %>% 
+  mutate(logp = -log10(p_PTVvar)) %>% 
+  ggplot() + 
+  geom_point(aes(x = hr_PTVvar, y = logp, color = p_PTVvar < 0.05, size = 1/p_PTVvar)) +
+  facet_wrap(~sex) +
+  scale_color_manual(values = c("#3C5488FF", "#E64B35FF")) +
+  scale_y_continuous(breaks = c(-log10(0.1), -log10(0.01))) +
+  labs(x = "Hazard Ratio", y = expression("-log"[10]*"P")) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  geom_text_repel(mapping = aes(x = hr_PTVvar, y = logp, color = p_PTVvar < 0.05, label = cancer_type), nudge_y = 0.07) +
+  theme_bw() +
+  theme(legend.position = "none")
+ggsave(filename = "Plots/003/volcano_cox_model_sepgender_freqtsgs_Praw.jpg", width = 40, height = 15, units = "cm", dpi = 300)
+```
+
 
 #Exclude patients with PTVs in sign. TSGs
 

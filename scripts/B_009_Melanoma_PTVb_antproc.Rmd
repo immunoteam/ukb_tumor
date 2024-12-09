@@ -1,0 +1,311 @@
+---
+title: "008_Melanoma_PTV_AP"
+output: html_document
+date: "2024-11-08"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db", "ggrepel", "ggsci", "scales", "ggpubr", "RColorBrewer")
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+```
+
+#Functions generate Cox model and Forest plot
+
+```{r}
+myFunForestPlot = function(dataset, geneset, tumor, gender, gpca_nb = 10, threads) {
+  #plan(future::cluster, workers = threads)
+  dataset$PTVburden = sapply(dataset$PTVgenes, function(x) {
+    g = strsplit(x, ",")[[1]]
+    sum(g %fin% geneset)
+  })
+  tumorous = dataset %>% 
+    dplyr::filter(cancer_type %in% tumor) %>% 
+    dplyr::filter(sex %in% gender) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 2)
+  nottumorous = dataset %>% 
+    dplyr::filter(cancer_type == "No_cancer") %>%
+    dplyr::filter(sex %in% gender) %>%
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+    )) %>% 
+    mutate(status = 1)
+  dataset2 = rbind(tumorous, nottumorous)
+  dataset2$PTVburdenG = as.factor(ifelse(dataset2$PTVburden == 0, 0, 1))
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, sex, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 1) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] == 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
+  } else {
+    dataset2 %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(dataset2)[4:ncol(dataset2)], collapse = "+")))
+  res.cox <- coxph(myformula, data = dataset2, id = dataset2$eid)
+  fm = forest_model(model = res.cox, return_data = T)
+  if(length(gender) == 2) {
+    tt = paste0(tumor, ", BOTH")
+  } else {
+    tt = paste0(tumor, ", ", gender)
+  }
+  fm$plot + labs(title = tt)
+}
+
+myFunCoxStats = function(dataset, geneset, tumor, gender, gpca_nb = 10, threads) {
+  #plan(future::cluster, workers = threads)
+  #plan(multisession(workers = threads))
+  dataset$PTVburden = sapply(dataset$PTVgenes, function(x) {
+    g = strsplit(x, ",")[[1]]
+    sum(g %fin% geneset)
+  })
+  tumorous = dataset %>% 
+    dplyr::filter(cancer_type %in% tumor) %>% 
+    dplyr::filter(sex %in% gender) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 2)
+  nottumorous = dataset %>% 
+    dplyr::filter(cancer_type == "No_cancer") %>%
+    dplyr::filter(sex %in% gender) %>%
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+    )) %>% 
+    mutate(status = 1)
+  dataset2 = rbind(tumorous, nottumorous)
+  dataset2$PTVburdenG = as.factor(ifelse(dataset2$PTVburden == 0, 0, 1))
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, sex, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 1) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] == 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
+  } else {
+    dataset2 %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(dataset2)[4:ncol(dataset2)], collapse = "+")))
+  res.cox <- coxph(myformula, data = dataset2, id = dataset2$eid)
+  coefs = summary(res.cox)$coefficients[,"exp(coef)"]
+  names(coefs) = paste0("hr_", names(coefs))
+  pvalues = summary(res.cox)$coefficients[,"Pr(>|z|)"]
+  names(pvalues) = paste0("p_", names(pvalues))
+  out = c(coefs, pvalues)
+  return(out)
+}
+
+myFunGroupNb = function(dataset, geneset, tumor, gender) {
+  dataset$PTVburden = sapply(dataset$PTVgenes, function(x) {
+    g = strsplit(x, ",")[[1]]
+    sum(g %fin% geneset)
+  })
+  tumorous = dataset %>% 
+    dplyr::filter(cancer_type %in% tumor) %>% 
+    dplyr::filter(sex %in% gender) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 2)
+  nottumorous = dataset %>% 
+    dplyr::filter(cancer_type == "No_cancer") %>%
+    dplyr::filter(sex %in% gender) %>%
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+    )) %>% 
+    mutate(status = 1)
+  dataset2 = rbind(tumorous, nottumorous)
+  dataset2$PTVburdenG = as.factor(ifelse(dataset2$PTVburden == 0, 0, 1))
+  table(dataset2$PTVburdenG, dataset2$cancer_type)
+}
+
+```
+
+#Dataset
+
+```{r}
+load("Objects/ukb_data_cancer_final")
+sum(Table(ukb_data_cancer$cancer_type))
+ukb_data = ukb_data_cancer %>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, gpca11, gpca12, gpca13, gpca14, gpca15, gpca16, gpca17, gpca18, gpca19, gpca20)
+rm(ukb_data_cancer)
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
+
+tumor_freq_data = expand.grid(cancer_type = sort(unique(ukb_data$cancer_type)), sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data = tumor_freq_data[!tumor_freq_data$cancer_type %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"),]
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    nrow()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n")
+
+```
+
+#MAF 10-4
+
+```{r}
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb_MAF104$Genes, ","), use.names = F))))
+gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+rm(gene_symbols)
+
+ukb_data$PTVgenes = ptvb_MAF104$Genes[fmatch(ukb_data$eid, ptvb_MAF104$Patient.ID)]
+rm(ptvb_MAF104)
+```
+
+#Gene set - Antigen processing and presentation
+
+```{r}
+load("Objects/go_desc_list")
+hugos = go_desc_list[["antigen processing and presentation"]]
+ensgs = genes_all$ENSEMBL[fmatch(hugos, genes_all$SYMBOL)]
+ensgs = ensgs[!is.na(ensgs)]
+```
+
+#Cox models
+
+```{r}
+temp_g = c("female", "male")
+temp_g = "female"
+temp_g = "male"
+temp_t = "Melanoma"
+temp_t = "Lung"
+
+myFunForestPlot(dataset = ukb_data, geneset = ensgs, tumor = temp_t, gender = temp_g, gpca_nb = 20)
+ggsave("Plots/009/melanoma_both.jpg", width = 20, height = 20, units = "cm")
+ggsave("Plots/009/melanoma_female.jpg", width = 20, height = 20, units = "cm")
+ggsave("Plots/009/melanoma_male.jpg", width = 20, height = 20, units = "cm")
+
+myFunCoxStats(dataset = ukb_data, geneset = ensgs, tumor = temp_t, gender = temp_g, gpca_nb = 20)
+myFunGroupNb(dataset = ukb_data, geneset = ensgs, tumor = temp_t, gender = temp_g)
+
+```
+
+#Which genes
+ENSG00000128815, WDFY4, WDFY Family Member 4 (13 patients, 6 f, 7 m): no assoc.
+ENSG00000103811, CTSH, Cathepsin H (7 patients, 3 f, 4 m): Increased expression of this gene has been correlated with malignant progression of prostate tumors.
+ENSG00000177628, GBA1, Glucosylceramidase Beta 1 (5 patients, 3 f, 2 m): no assoc.
+ENSG00000118508, RAB32, RAB32, Member RAS Oncogene Family (4 patients, 2 f, 2 m): Breast Lipid-Rich Carcinoma
+ENSG00000109113, RAB34, RAB34, Member RAS Oncogene Family (3 patients, 2 f, 1 m): no assoc.
+ENSG00000104938, CLEC4M C-Type Lectin Domain Family 4 Member M (2 patients, 2 f, 0 m): Lung cancer
+ENSG00000168118, RAB4A RAB4A, Member RAS Oncogene Family (2 patients, 2 f, 0 m): Chronic Myelomonocytic Leukemia
+ENSG00000153563, CD8A, CD8 Subunit Alpha (2 patients, 1 f, 1 m): no assoc.
+
+```{r}
+mat = pbsapply(ensgs, function(genes) {
+  grepl(genes, ukb_data$PTVgenes)
+})
+colnames(mat) = ensgs
+ukb_data = cbind(ukb_data, mat)
+
+ukb_data$PTVburden = apply(ukb_data[,29:51], 1, sum)
+# ptvb_antproc = unique(ukb_data[,c("eid", "PTVburden")])
+# save(ptvb_antproc, file = "Objects/009/ptvb_antproc")
+
+tumorous = ukb_data %>% 
+  dplyr::filter(cancer_type %in% tumor) %>% 
+  dplyr::filter(sex %in% gender) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2)
+nottumorous = ukb_data %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  dplyr::filter(sex %in% gender) %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1)
+ukb_data2 = rbind(tumorous, nottumorous)
+ukb_data2$PTVburdenG = as.factor(ifelse(ukb_data2$PTVburden == 0, 0, 1))
+
+sort(colSums(tumorous[,29:51]), decreasing = T)
+genes_all %>% filter(ENSEMBL %in% geneset) %>% View()
+
+```
+
+
+
+#Without BROCA patients
+
+```{r}
+broca_crp = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
+
+gene_ids = bitr(geneID = broca_crp, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+mat = pbsapply(gene_ids$ENSEMBL, function(genes) {
+  grepl(genes, ukb_data$PTVgenes)
+})
+keep_ind = apply(mat, 1, function(z) !any(z))
+ukb_dataF = ukb_data[keep_ind,]
+
+
+temp_g = c("female", "male")
+temp_g = "female"
+temp_g = "male"
+temp_t = "Melanoma"
+temp_t = "Lung"
+
+myFunForestPlot(dataset = ukb_dataF, geneset = ensgs, tumor = temp_t, gender = temp_g, gpca_nb = 20)
+ggsave("Plots/009/melanoma_both_woBROCA.jpg", width = 20, height = 20, units = "cm")
+ggsave("Plots/009/melanoma_female_woBROCA.jpg", width = 20, height = 20, units = "cm")
+ggsave("Plots/009/melanoma_male_woBROCA.jpg", width = 20, height = 20, units = "cm")
+
+myFunCoxStats(dataset = ukb_dataF, geneset = ensgs, tumor = temp_t, gender = temp_g, gpca_nb = 20)
+myFunGroupNb(dataset = ukb_dataf, geneset = ensgs, tumor = temp_t, gender = temp_g)
+
+myFunForestPlot(dataset = ukb_data, geneset = gene_ids$ENSEMBL, tumor = temp_t, gender = temp_g, gpca_nb = 20)
+ggsave("Plots/009/melanoma_both_BROCA_PTV.jpg", width = 20, height = 20, units = "cm")
+ggsave("Plots/009/melanoma_female_BROCA_PTV.jpg", width = 20, height = 20, units = "cm")
+ggsave("Plots/009/melanoma_male_BROCA_PTV.jpg", width = 20, height = 20, units = "cm")
+
+
+```
+
+#Other gene sets
+
+```{r}
+ensgs_all_app = grep("antigen processing", names(go_desc_list), value = T)
+go_desc_list_F = go_desc_list[ensgs_all_app]
+go_desc_list_F = go_desc_list_F[lengths(go_desc_list_F)>=5]
+ensgs_all_app = names(go_desc_list_F)
+
+res = sapply(ensgs_all_app, function(e) {
+  hugos = go_desc_list[[e]]
+  tempensgs = genes_all$ENSEMBL[fmatch(hugos, genes_all$SYMBOL)]
+  tempensgs = tempensgs[!is.na(tempensgs)]
+  myFunCoxStats(dataset = ukb_data, geneset = tempensgs, tumor = "Melanoma", gender = c("female", "male"), gpca_nb = 10)
+})
+res = t(res)
+```
+
+

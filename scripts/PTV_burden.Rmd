@@ -44,7 +44,7 @@ save(goterm_tbl, file = "Objects/goterm_tbl")
 
 ```{r}
 #Load PTV burden data
-ptvb = fread("Objects/PTVburden_without_MAF-001/PTVburden_without_MAF-001.tsv")
+ptvb = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/PTVburden_without_MAF-001.tsv")
 
 genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb$Genes, ","), use.names = F))))
 gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
@@ -107,7 +107,7 @@ rm(genes_all, genes_immune, genes_pli, genes_tsg, temp, temp2)
 
 ```{r}
 #Load PTV burden data
-ptvb_wMAF = fread("Objects/PTV_2024_05/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_wMAF = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
 
 genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb_wMAF$Genes, ","), use.names = F))))
 gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")

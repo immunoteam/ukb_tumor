@@ -182,6 +182,15 @@ pbsapply(ptvs, function(p) {
   ggsave(paste0("Plots/001/Cox_2/cox_fp_anytumor_", p, "_freqTSGs_filtered.jpg"), plot = fig, width = 20, height = 25, units = "cm", dpi = 150)
 })
 
+
+tempdf = ukb_data %>% dplyr::select(eid, sex, cancer_type, time, status, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, all_of(overrep_tsgs_hugo))
+colnames(tempdf)[6] = "PTVburden"
+tempdf %<>% dplyr::select(eid, time, status, PTVburden, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, all_of(overrep_tsgs_hugo))
+tempdf = tempdf[!apply(tempdf[,16:ncol(tempdf)], 1, any),]
+res.cox <- coxph(Surv(time, status) ~ PTVburden + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdf, id = tempdf$eid)
+fig = forest_model(model = res.cox, show_global_p = "bottom")
+ggsave(paste0("Plots/001/Cox_2/cox_fp_anytumor_", p, "_freqTSGs_filtered.jpg"), plot = fig, width = 23, height = 25, units = "cm", dpi = 150)
+
 ```
 
 ##Incidence plot - PTVtsg
@@ -228,6 +237,115 @@ ggcuminc(x = cuminc(Surv(time = inc_age, event = inc_event) ~ PTVtsg_MAF_g, data
   ggtitle("Cumulative incidence") +
   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), legend.position = "right") +
   coord_cartesian(xlim = c(40, 90))
+
+```
+
+#BROCA cancer risk panel genes
+##Dataset
+
+```{r}
+broca_crp = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
+
+ukb_data = readRDS("Objects/ukb_data.rds")
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
+
+ukb_data$PTVtsg_MAF_g3 = cut(ukb_data$PTVtsg_MAF, breaks = c(0,1,2,max(ukb_data$PTVtsg_MAF)), include.lowest = T, right = F)
+Table(ukb_data$PTVtsg_MAF_g3)
+ukb_data$PTVtsg_MAF_g4 = cut(ukb_data$PTVtsg_MAF, breaks = c(0,1,2,3,max(ukb_data$PTVtsg_MAF)), include.lowest = T, right = F)
+Table(ukb_data$PTVtsg_MAF_g4)
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[grepl("MAF", ptvs)]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, all_of(ptvs), Genes_PTV_MAF, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+nottumorous = ukb_data %>% 
+  #dplyr::filter(!eid %in% tumorous$eid) %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, all_of(ptvs), Genes_PTV_MAF, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+intersect(tumorous$eid, nottumorous$eid)
+
+ukb_data = rbind(tumorous, nottumorous)
+
+gene_ids = bitr(geneID = broca_crp, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+
+mat = pbsapply(gene_ids$ENSEMBL, function(genes) {
+  grepl(genes, ukb_data$Genes_PTV_MAF)
+})
+colnames(mat) = gene_ids$SYMBOL
+ukb_data = cbind(ukb_data, mat)
+rm(mat)
+
+```
+
+##Cox models and forest plots
+
+```{r}
+ptvs = ptvs[!grepl("Genes", ptvs)]
+
+i=0
+res = pbsapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tempdf = ukb_data %>% dplyr::select(eid, sex, cancer_type, time, status, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, all_of(gene_ids$SYMBOL))
+  colnames(tempdf)[6] = "PTVvar"
+  tempdf %<>% dplyr::select(eid, time, status, PTVvar, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, all_of(gene_ids$SYMBOL))
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+  res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+  fig = forest_model(model = res.cox, show_global_p = "bottom", n_logical_true_only = T)
+  ggsave(paste0("Plots/001/Cox_3/cox_fp_anytumor_", p, "_broca.jpg"), plot = fig, width = 15, height = 70, units = "cm", dpi = 300)
+  out = as.numeric(rbind(summary(res.cox)$coefficient[,"exp(coef)"], summary(res.cox)$coefficient[,"Pr(>|z|)"]))
+  names(out)[seq(1,length(out),2)] = paste0("hr_", rownames(summary(res.cox)$coefficient))
+  names(out)[seq(2,length(out),2)] = paste0("p_", rownames(summary(res.cox)$coefficient))
+  out
+})
+resdf = do.call(rbind, res[1:9])
+save(resdf, file = "Res/001/res_cox_3_with_broca")
+
+#Without PTVs in BROCA
+
+keep_ind = apply(ukb_data[,28:95], 1, function(z) !any(z))
+ukb_data = ukb_data[keep_ind,]
+ptvs = ptvs[!grepl("Genes", ptvs)]
+i=0
+res = pbsapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  tempdf = ukb_data %>% dplyr::select(eid, sex, cancer_type, time, status, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  colnames(tempdf)[6] = "PTVburden"
+  tempdf %<>% dplyr::select(eid, time, status, PTVburden, sex, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+  res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+  fig = forest_model(model = res.cox, show_global_p = "bottom", n_logical_true_only = T)
+  ggsave(paste0("Plots/001/Cox_3/cox_fp_anytumor_", p, "_broca_excl.jpg"), plot = fig, width = 22, height = 18, units = "cm", dpi = 300)
+  out = as.numeric(rbind(summary(res.cox)$coefficient[,"exp(coef)"], summary(res.cox)$coefficient[,"Pr(>|z|)"]))
+  names(out)[seq(1,length(out),2)] = paste0("hr_", rownames(summary(res.cox)$coefficient))
+  names(out)[seq(2,length(out),2)] = paste0("p_", rownames(summary(res.cox)$coefficient))
+  out
+})
+resdf = do.call(rbind, res[1:9])
+save(resdf, file = "Res/001/res_cox_3_exclude_broca")
 
 ```
 

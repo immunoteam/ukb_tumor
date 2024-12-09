@@ -1,0 +1,645 @@
+---
+title: "B_010_Collect_frequent_PTVs_by_tumors_and_genders"
+output: html_document
+date: "2024-11-12"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db", "ggrepel", "ggsci", "scales", "ggpubr", "RColorBrewer")
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+```
+
+#Dataset
+
+```{r}
+load("Objects/ukb_data_cancer_final")
+geg = fread("Variables/22006.txt") #caucasians
+sum(Table(ukb_data_cancer$cancer_type))
+ukb_data = ukb_data_cancer %>% 
+  filter(eid %fin% as.character(geg$eid)) %>% 
+  dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, gpca11, gpca12, gpca13, gpca14, gpca15, gpca16, gpca17, gpca18, gpca19, gpca20)
+rm(ukb_data_cancer, geg)
+
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+ptvb_MAF103 = fread("PTVvars/ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF103 = ptvb_MAF103[ptvb_MAF103$Patient.ID %fin% ukb_data$eid,]
+
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 = ptvb_MAF104[ptvb_MAF104$Patient.ID %fin% ukb_data$eid,]
+
+genesFreq = data.frame(ENSEMBL = sort(unique(c(unlist(strsplit(ptvb_MAF103$Genes, ","), use.names = F), unlist(strsplit(ptvb_MAF104$Genes, ","), use.names = F)))))
+gene_symbols = bitr(geneID = genesFreq$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genesFreq$SYMBOL = gene_symbols$SYMBOL[fmatch(genesFreq$ENSEMBL, gene_symbols$ENSEMBL)]
+rm(gene_symbols)
+
+ukb_data$PTVgenes103 = ptvb_MAF103$Genes[fmatch(ukb_data$eid, ptvb_MAF103$Patient.ID)]
+ukb_data$PTVgenes104 = ptvb_MAF104$Genes[fmatch(ukb_data$eid, ptvb_MAF104$Patient.ID)]
+rm(ptvb_MAF103, ptvb_MAF104)
+
+tsg = fread("Objects/tumor_supressor_genes_bioinfo_uth.txt")
+genesFreq$tsg = genesFreq$SYMBOL %in% tsg$GeneSymbol
+rm(tsg)
+
+save(ukb_data, file = "Objects/010/ukb_data")
+```
+
+#PTV gene frequencies
+##MAF 10-3
+###All UKB
+
+```{r}
+ukb_data_unique = ukb_data %>% 
+  dplyr::select(eid, PTVgenes103) %>% 
+  unique()
+genesFreq$n_UKB = nrow(ukb_data_unique)
+
+temp = Table(unlist(lapply(ukb_data_unique$PTVgenes103, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$allUKB = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$allUKB[is.na(genesFreq$allUKB)] = 0
+rm(temp)
+
+##Females
+ukb_data_female = ukb_data %>% 
+  dplyr::filter(sex == "female") %>% 
+  dplyr::select(eid, PTVgenes103) %>% 
+  unique()
+genesFreq$n_UKB_female = nrow(ukb_data_female)
+
+##Males
+ukb_data_male = ukb_data %>% 
+  dplyr::filter(sex == "male") %>% 
+  dplyr::select(eid, PTVgenes103) %>% 
+  unique()
+genesFreq$n_UKB_male = nrow(ukb_data_male)
+rm(ukb_data_female, ukb_data_male, ukb_data_unique)
+
+```
+
+###Not tumorous
+
+```{r}
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+v1 = ukb_data %>%
+  filter(cancer_type == "No_cancer") %>%
+  pull(eid)
+v2 = ukb_data %>%
+  filter(cancer_type %in% tumors) %>%
+  pull(eid)
+length(intersect(v1, v2)) #0
+rm(v1, v2)
+
+#ALL
+nottumorous = ukb_data %>% 
+  filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+
+temp = Table(unlist(lapply(nottumorous$PTVgenes103, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_notTumorous = nrow(nottumorous)
+genesFreq$notTumorous = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$notTumorous[is.na(genesFreq$notTumorous)] = 0
+rm(temp, nottumorous)
+
+#FEMALE
+nottumorous_female = ukb_data %>% 
+  dplyr::filter(sex == "female") %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(nottumorous_female$PTVgenes103, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_notTumorous_f = nrow(nottumorous_female)
+genesFreq$notTumorous_f = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$notTumorous_f[is.na(genesFreq$notTumorous_f)] = 0
+rm(temp, nottumorous_female)
+
+#MALE
+nottumorous_male = ukb_data %>% 
+  dplyr::filter(sex == "male") %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(nottumorous_male$PTVgenes103, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_notTumorous_m = nrow(nottumorous_male)
+genesFreq$notTumorous_m = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$notTumorous_m[is.na(genesFreq$notTumorous_m)] = 0
+rm(temp, nottumorous_male)
+
+```
+
+###Tumorous
+####Any kind of tumors
+
+```{r}
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(tumorous$PTVgenes103, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_tumorous = nrow(tumorous)
+genesFreq$tumorous = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$tumorous[is.na(genesFreq$tumorous)] = 0
+rm(temp, tumorous)
+
+#FEMALE
+tumorous_female = ukb_data %>% 
+  dplyr::filter(sex == "female") %>%
+  dplyr::filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(tumorous_female$PTVgenes103, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_tumorous_f = nrow(tumorous_female)
+genesFreq$tumorous_f = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$tumorous_f[is.na(genesFreq$tumorous_f)] = 0
+rm(temp, tumorous_female)
+
+#MALE
+tumorous_male = ukb_data %>% 
+  dplyr::filter(sex == "male") %>%
+  dplyr::filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(tumorous_male$PTVgenes103, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_tumorous_m = nrow(tumorous_male)
+genesFreq$tumorous_m = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$tumorous_m[is.na(genesFreq$tumorous_m)] = 0
+rm(temp, tumorous_male)
+```
+
+####Tumors separately
+
+```{r}
+tumor_dfs = pblapply(tumors, function(t) {
+  ukb_data %>% 
+    filter(cancer_type == t) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T)
+})
+names(tumor_dfs) = tumors
+
+plan(multisession(workers = 8))
+tumor_freqmat = future_lapply(tumors, function(t) {
+  temp = Table(unlist(lapply(tumor_dfs[[t]]$PTVgenes103, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  temp2 = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+  temp2[is.na(temp2)] = 0
+  out = cbind(rep(nrow(tumor_dfs[[t]]), length(temp2)), temp2)
+  colnames(out) = c(paste0("n_", t), t)
+  out
+}, future.seed=TRUE)
+tumor_freqmat = do.call(cbind, tumor_freqmat)
+genesFreq = cbind(genesFreq, tumor_freqmat)
+rm(tumor_dfs, tumor_freqmat)
+
+
+```
+
+####Tumors and genders separately
+
+```{r}
+tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    nrow()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n")
+
+tumor_gender_dfs = pbapply(tumor_freq_data, 1, function(x) {
+  ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T)
+})
+names(tumor_gender_dfs) = tumor_freq_data$TS
+
+
+
+plan(multisession(workers = 8))
+tumor_gender_freqmat = future_lapply(tumor_freq_data$TS, function(t) {
+  temp = Table(unlist(lapply(tumor_gender_dfs[[t]]$PTVgenes103, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  temp2 = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+  temp2[is.na(temp2)] = 0
+  out = cbind(rep(nrow(tumor_gender_dfs[[t]]), length(temp2)), temp2)
+  colnames(out) = c(paste0("n_", t), t)
+  out
+}, future.seed=TRUE)
+tumor_gender_freqmat = do.call(cbind, tumor_gender_freqmat)
+genesFreq = cbind(genesFreq, tumor_gender_freqmat)
+rm(tumor_gender_dfs, tumor_gender_freqmat)
+
+saveRDS(genesFreq, file = "Res/010/genesFreq_all_103.rds")
+
+```
+
+##MAF 10-4
+
+###All UKB
+
+```{r}
+genesFreq %<>% dplyr::select(ENSEMBL, SYMBOL, tsg)
+ukb_data_unique = ukb_data %>% 
+  dplyr::select(eid, PTVgenes104) %>% 
+  unique()
+genesFreq$n_UKB = nrow(ukb_data_unique)
+
+temp = Table(unlist(lapply(ukb_data_unique$PTVgenes104, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$allUKB = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$allUKB[is.na(genesFreq$allUKB)] = 0
+rm(temp)
+
+##Females
+ukb_data_female = ukb_data %>% 
+  dplyr::filter(sex == "female") %>% 
+  dplyr::select(eid, PTVgenes104) %>% 
+  unique()
+genesFreq$n_UKB_female = nrow(ukb_data_female)
+
+##Males
+ukb_data_male = ukb_data %>% 
+  dplyr::filter(sex == "male") %>% 
+  dplyr::select(eid, PTVgenes104) %>% 
+  unique()
+genesFreq$n_UKB_male = nrow(ukb_data_male)
+rm(ukb_data_female, ukb_data_male, ukb_data_unique)
+
+```
+
+###Not tumorous
+
+```{r}
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+v1 = ukb_data %>%
+  filter(cancer_type == "No_cancer") %>%
+  pull(eid)
+v2 = ukb_data %>%
+  filter(cancer_type %in% tumors) %>%
+  pull(eid)
+length(intersect(v1, v2)) #0
+rm(v1, v2)
+
+#ALL
+nottumorous = ukb_data %>% 
+  filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+
+temp = Table(unlist(lapply(nottumorous$PTVgenes104, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_notTumorous = nrow(nottumorous)
+genesFreq$notTumorous = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$notTumorous[is.na(genesFreq$notTumorous)] = 0
+rm(temp, nottumorous)
+
+#FEMALE
+nottumorous_female = ukb_data %>% 
+  dplyr::filter(sex == "female") %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(nottumorous_female$PTVgenes104, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_notTumorous_f = nrow(nottumorous_female)
+genesFreq$notTumorous_f = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$notTumorous_f[is.na(genesFreq$notTumorous_f)] = 0
+rm(temp, nottumorous_female)
+
+#MALE
+nottumorous_male = ukb_data %>% 
+  dplyr::filter(sex == "male") %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(nottumorous_male$PTVgenes104, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_notTumorous_m = nrow(nottumorous_male)
+genesFreq$notTumorous_m = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$notTumorous_m[is.na(genesFreq$notTumorous_m)] = 0
+rm(temp, nottumorous_male)
+
+```
+
+###Tumorous
+####Any kind of tumors
+
+```{r}
+tumorous = ukb_data %>% 
+  filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(tumorous$PTVgenes104, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_tumorous = nrow(tumorous)
+genesFreq$tumorous = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$tumorous[is.na(genesFreq$tumorous)] = 0
+rm(temp, tumorous)
+
+#FEMALE
+tumorous_female = ukb_data %>% 
+  dplyr::filter(sex == "female") %>%
+  dplyr::filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(tumorous_female$PTVgenes104, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_tumorous_f = nrow(tumorous_female)
+genesFreq$tumorous_f = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$tumorous_f[is.na(genesFreq$tumorous_f)] = 0
+rm(temp, tumorous_female)
+
+#MALE
+tumorous_male = ukb_data %>% 
+  dplyr::filter(sex == "male") %>%
+  dplyr::filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T)
+temp = Table(unlist(lapply(tumorous_male$PTVgenes104, function(g) {
+  unique(strsplit(g, ",")[[1]])
+})))
+genesFreq$n_tumorous_m = nrow(tumorous_male)
+genesFreq$tumorous_m = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+genesFreq$tumorous_m[is.na(genesFreq$tumorous_m)] = 0
+rm(temp, tumorous_male)
+```
+
+####Tumors separately
+
+```{r}
+tumor_dfs = pblapply(tumors, function(t) {
+  ukb_data %>% 
+    filter(cancer_type == t) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T)
+})
+names(tumor_dfs) = tumors
+
+plan(multisession(workers = 8))
+tumor_freqmat = future_lapply(tumors, function(t) {
+  temp = Table(unlist(lapply(tumor_dfs[[t]]$PTVgenes104, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  temp2 = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+  temp2[is.na(temp2)] = 0
+  out = cbind(rep(nrow(tumor_dfs[[t]]), length(temp2)), temp2)
+  colnames(out) = c(paste0("n_", t), t)
+  out
+}, future.seed=TRUE)
+tumor_freqmat = do.call(cbind, tumor_freqmat)
+genesFreq = cbind(genesFreq, tumor_freqmat)
+rm(tumor_dfs, tumor_freqmat)
+
+
+```
+
+####Tumors and genders separately
+
+```{r}
+tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    nrow()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n")
+
+tumor_gender_dfs = pbapply(tumor_freq_data, 1, function(x) {
+  ukb_data %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T)
+})
+names(tumor_gender_dfs) = tumor_freq_data$TS
+
+
+
+plan(multisession(workers = 8))
+tumor_gender_freqmat = future_lapply(tumor_freq_data$TS, function(t) {
+  temp = Table(unlist(lapply(tumor_gender_dfs[[t]]$PTVgenes104, function(g) {
+    unique(strsplit(g, ",")[[1]])
+  })))
+  temp2 = unname(temp[fmatch(genesFreq$ENSEMBL, names(temp))])
+  temp2[is.na(temp2)] = 0
+  out = cbind(rep(nrow(tumor_gender_dfs[[t]]), length(temp2)), temp2)
+  colnames(out) = c(paste0("n_", t), t)
+  out
+}, future.seed=TRUE)
+tumor_gender_freqmat = do.call(cbind, tumor_gender_freqmat)
+genesFreq = cbind(genesFreq, tumor_gender_freqmat)
+rm(tumor_gender_dfs, tumor_gender_freqmat)
+
+saveRDS(genesFreq, file = "Res/010/genesFreq_all_104.rds")
+
+```
+
+#Overrepresented genes in tumors
+##MAF 10-3
+G6PC1 (ENSG00000131482), Rectum Male, OR: 5.370108 - evidences, literature?
+ASXL1 (Leukemia, Leukemia_male), 
+BRCA2 (Breast_female), 
+PALB2 (Breast_female), 
+ASXL1, BRCA2, PALB2 (tumorous)
+
+```{r}
+genesFreq = readRDS("Res/010/genesFreq_all_103.rds")
+cats = c("tumorous", colnames(genesFreq)[seq(21,69,2)])
+n_nottumorous = genesFreq$n_notTumorous[1]
+genesFreq12 = genesFreq %>% dplyr::select(ENSEMBL, SYMBOL)
+
+plan(multisession(workers = 12))
+res_fish_1 = future_lapply(cats, function(x) {
+  ind1 = fmatch(x, colnames(genesFreq))
+  ind2 = fmatch(paste0("n_", x), colnames(genesFreq))
+  ftpOR = t(apply(genesFreq, 1, function(y) {
+    ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[9])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), n_nottumorous - as.numeric(y[9]))))
+    c(unname(ft$estimate), ft$p.value)
+  }))
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(category = x, .before = "OR") %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  bind_cols(genesFreq12, ftpOR)
+})
+res_fish_1 = bind_rows(res_fish_1)
+
+#####
+cats2 = colnames(genesFreq)[seq(71,ncol(genesFreq),2)]
+res_fish_2 = future_lapply(cats2, function(x) {
+  ind1 = fmatch(x, colnames(genesFreq))
+  ind2 = fmatch(paste0("n_", x), colnames(genesFreq))
+  if(grepl("_female", x)) {
+    ftpOR = t(apply(genesFreq, 1, function(y) {
+      ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[11])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), as.numeric(y[10]) - as.numeric(y[11]))))
+      c(unname(ft$estimate), ft$p.value)
+    }))
+  } else {
+    ftpOR = t(apply(genesFreq, 1, function(y) {
+      ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[13])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), as.numeric(y[12]) - as.numeric(y[13]))))
+      c(unname(ft$estimate), ft$p.value)
+    }))
+  }
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(category = x, .before = "OR") %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  bind_cols(genesFreq12, ftpOR)
+})
+res_fish_2 = bind_rows(res_fish_2)
+
+res_fishtest = rbind(res_fish_1, res_fish_2)
+
+save(res_fishtest, file = "Res/010/res_fishtest_103")
+
+
+View(genesFreq[genesFreq$ENSEMBL == "ENSG00000104804",])
+```
+
+
+##MAF 10-4
+
+```{r}
+genesFreq = readRDS("Res/010/genesFreq_all_104.rds")
+cats = c("tumorous", colnames(genesFreq)[seq(21,69,2)])
+n_nottumorous = genesFreq$n_notTumorous[1]
+genesFreq12 = genesFreq %>% dplyr::select(ENSEMBL, SYMBOL)
+
+plan(multisession(workers = 12))
+res_fish_1 = future_lapply(cats, function(x) {
+  ind1 = fmatch(x, colnames(genesFreq))
+  ind2 = fmatch(paste0("n_", x), colnames(genesFreq))
+  ftpOR = t(apply(genesFreq, 1, function(y) {
+    ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[9])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), n_nottumorous - as.numeric(y[9]))))
+    c(unname(ft$estimate), ft$p.value)
+  }))
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(category = x, .before = "OR") %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  bind_cols(genesFreq12, ftpOR)
+})
+res_fish_1 = bind_rows(res_fish_1)
+
+#####
+cats2 = colnames(genesFreq)[seq(71,ncol(genesFreq),2)]
+res_fish_2 = future_lapply(cats2, function(x) {
+  ind1 = fmatch(x, colnames(genesFreq))
+  ind2 = fmatch(paste0("n_", x), colnames(genesFreq))
+  if(grepl("_female", x)) {
+    ftpOR = t(apply(genesFreq, 1, function(y) {
+      ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[11])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), as.numeric(y[10]) - as.numeric(y[11]))))
+      c(unname(ft$estimate), ft$p.value)
+    }))
+  } else {
+    ftpOR = t(apply(genesFreq, 1, function(y) {
+      ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[13])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), as.numeric(y[12]) - as.numeric(y[13]))))
+      c(unname(ft$estimate), ft$p.value)
+    }))
+  }
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(category = x, .before = "OR") %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  bind_cols(genesFreq12, ftpOR)
+})
+res_fish_2 = bind_rows(res_fish_2)
+
+res_fishtest = rbind(res_fish_1, res_fish_2)
+
+save(res_fishtest, file = "Res/010/res_fishtest_104")
+
+load("Res/010/res_fishtest_104")
+View(genesFreq[genesFreq$ENSEMBL == "ENSG00000104804",])
+```
+
+#GO enrichment analysis
+
+```{r}
+library(clusterProfiler)
+library(org.Hs.eg.db)
+
+res_fishtest$ENTREZID = mapIds(org.Hs.eg.db, keys = res_fishtest$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
+genesFreq12$ENTREZID = mapIds(org.Hs.eg.db, keys = genesFreq12$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
+res_fishtest %>% filter(Padj < 0.2) %>% pull(category) %>% table() %>% sort(decreasing = T)
+t = "tumorous"
+t = "Leukemia"
+t = "Breast"
+t = "Colon_male"
+t = "Prostate"
+t = "Lung"
+
+ggo <- groupGO(gene = res_fishtest$ENTREZID[res_fishtest$OR > 1 & res_fishtest$Padj < .2 & res_fishtest$category == t],
+               OrgDb = org.Hs.eg.db,
+               ont = "CC",
+               level = 3,
+               readable = TRUE)
+head(ggo)
+ggo@result %>% View()
+
+
+#pvalueCutoff = 0.01
+#qvalueCutoff = 0.05
+ego <- enrichGO(gene = res_fishtest$ENTREZID[res_fishtest$OR > 1 & res_fishtest$Padj < .2 & res_fishtest$category == t],
+                universe = genesFreq12$ENTREZID,
+                OrgDb = org.Hs.eg.db,
+                ont = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.1,
+                qvalueCutoff = 0.1,
+                readable = TRUE)
+goplot(ego)
+ego@result
+head(ego)
+
+
+```
+
+#Melanoma
+
+```{r}
+t = "Melanoma_female"
+
+ego <- enrichGO(gene = res_fishtest %>% dplyr::filter(OR > 1, P < 0.05, category == t) %>% pull(ENTREZID) %>% na.omit(),
+                universe = genesFreq12$ENTREZID,
+                OrgDb = org.Hs.eg.db,
+                ont = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.2,
+                qvalueCutoff = 0.2,
+                readable = TRUE)
+goplot(ego)
+ego@result %>% View()
+head(ego)
+
+```
+

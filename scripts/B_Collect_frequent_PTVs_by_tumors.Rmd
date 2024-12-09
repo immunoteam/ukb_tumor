@@ -280,14 +280,14 @@ n_nottumorous = genesFreq_TSG$n_notTumorous[1]
 
 plan(multisession(workers = 12))
 overrep_genes_list = future_lapply(ts, function(t) {
-  ind = fmatch(t, colnames(genesFreq_TSG))
-  n_tumorous = genesFreq_TSG[1,paste0("n_", t)]
-  ftpOR = t(apply(genesFreq_TSG, 1, function(x) {
+  ind = fmatch(t, colnames(genesFreq))
+  n_tumorous = genesFreq[1,paste0("n_", t)]
+  ftpOR = t(apply(genesFreq, 1, function(x) {
     ft = fisher.test(rbind(c(as.numeric(x[ind]), as.numeric(x[7])), c(n_tumorous - as.numeric(x[ind]), n_nottumorous - as.numeric(x[7]))))
     c(unname(ft$estimate), ft$p.value)
   }))
   ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(Padj = p.adjust(p = P, method = "BH"))
-  cbind(genesFreq_TSG[,c("ENSEMBL", "SYMBOL", "allUKB", "notTumorous", "tumorous")], ftpOR)
+  cbind(genesFreq[,c("ENSEMBL", "SYMBOL", "allUKB", "notTumorous", "tumorous")], ftpOR)
 })
 names(overrep_genes_list) = ts
 
@@ -297,7 +297,7 @@ names(overrep_tsgs_ensg) = ts
 overrep_tsgs_hugo = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.05) %>% pull(SYMBOL))
 names(overrep_tsgs_hugo) = ts
 lengths(overrep_tsgs_ensg)
-save(overrep_tsgs_ensg, overrep_tsgs_hugo, file = "Objects/overrep_ft_005_tsgs_TS")
+save(overrep_tsgs_ensg, overrep_tsgs_hugo, file =  "Objects/overrep_ft_005_tsgs_TS")
 
 #0.1
 overrep_tsgs_ensg = lapply(ts, function(t) overrep_genes_list[[t]] %>% filter(Padj<0.1) %>% pull(ENSEMBL))
