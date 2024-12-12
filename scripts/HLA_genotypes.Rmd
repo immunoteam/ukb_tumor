@@ -1,0 +1,80 @@
+---
+title: "HLA_genotypes"
+output: html_document
+date: "2024-09-27"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/NCBI_mutations/")
+Packages <- c("tidyverse", "data.table", "magrittr", "future.apply", "Rfast")
+#,, "RColorBrewer", , "pbapply", , "fastmatch", "ggrepel", "ggpubr", , , , , "waffle", "networkD3", "protr", , "networkD3", , , "Biostrings", "ComplexHeatmap", , "waffle", "readr"  
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+```
+
+
+```{r}
+hla_data = fread("Variables/ukbiobank_HLA.txt", sep = "\t", col.names = c("eid", "value", "empty"))
+hla_data %<>% select(eid, value)
+
+cn = readLines("Variables/ukb_hla_v2.txt")
+cn = unlist(strsplit(cn, "\t"), use.names = F) #362
+cn[substr(cn,1,1) %in% c("A", "B", "C") & nchar(cn) == 5] = gsub("_", "0", cn[substr(cn,1,1) %in% c("A", "B", "C") & nchar(cn) == 5])
+cn[substr(cn,1,1) %in% c("A", "B", "C") & nchar(cn) == 6] = gsub("_", "", cn[substr(cn,1,1) %in% c("A", "B", "C") & nchar(cn) == 6])
+cn[substr(cn,1,2) %in% c("DR", "DQ", "DP") & nchar(cn) == 8] = gsub("_", "0", cn[substr(cn,1,2) %in% c("DR", "DQ", "DP") & nchar(cn) == 8])
+cn[substr(cn,1,2) %in% c("DR", "DQ", "DP") & nchar(cn) == 9] = gsub("_", "", cn[substr(cn,1,2) %in% c("DR", "DQ", "DP") & nchar(cn) == 9])
+table(nchar(cn))
+
+
+plan(multisession(workers = 8))
+hla_UKB = future_lapply(hla_data$value, function(x) {
+  hla_code = as.numeric(strsplit(x,",")[[1]])
+  if(length(hla_code) == 362) {
+      names(hla_code) = cn
+  #hla_code[hla_code>1.5]
+  hla_code[hla_code<0.7] = NA
+  hla_code = round(hla_code,0)
+  hla_code = hla_code[!is.na(hla_code)]
+  hla_code = rep(names(hla_code), hla_code)
+  hlaa = hla_code[substr(hla_code,1,1) == "A"]
+  hlab = hla_code[substr(hla_code,1,1) == "B"]
+  hlac = hla_code[substr(hla_code,1,1) == "C"]
+  hladrb5 = hla_code[substr(hla_code,1,4) == "DRB5"]
+  hladrb4 = hla_code[substr(hla_code,1,4) == "DRB4"]
+  hladrb3 = hla_code[substr(hla_code,1,4) == "DRB3"]
+  hladrb1 = hla_code[substr(hla_code,1,4) == "DRB1"]
+  hladqa1 = hla_code[substr(hla_code,1,4) == "DQA1"]
+  hladqb1 = hla_code[substr(hla_code,1,4) == "DQB1"]
+  hladpa1 = hla_code[substr(hla_code,1,4) == "DPA1"]
+  hladpb1 = hla_code[substr(hla_code,1,4) == "DPB1"]
+  out = c(c(hlaa, rep(NA, 2-length(hlaa))),
+    c(hlab, rep(NA, 2-length(hlab))),
+    c(hlac, rep(NA, 2-length(hlac))),
+    c(hladpa1, rep(NA, 2-length(hladpa1))),
+    c(hladpb1, rep(NA, 2-length(hladpb1))),
+    c(hladqa1, rep(NA, 2-length(hladqa1))),
+    c(hladqb1, rep(NA, 2-length(hladqb1))),
+    c(hladrb1, rep(NA, 2-length(hladrb1))),
+    c(hladrb3, rep(NA, 2-length(hladrb3))),
+    c(hladrb4, rep(NA, 2-length(hladrb4))),
+    c(hladrb5, rep(NA, 2-length(hladrb5))))
+  } else {
+    out = rep(NA, 22)
+  }
+  out
+})
+names(hla_UKB) = hla_data$eid
+saveRDS(hla_UKB, file = "Objects/hla_UKB.rds")
+
+Table(lengths(hla_UKB))
+Table(sapply(hla_UKB, function(x) {
+  temp = x[11:14]
+  temp = temp[!is.na(temp)]
+  length(temp)
+}))
+```
+

@@ -338,7 +338,8 @@ rm(ptvb_antproc)
 
 ptvs = grep("antigen", colnames(ukb_dataF), value = T)
 
-tumors = c("Melanoma", "Lung", "Bladder", "Kidney", "Liver")
+tumors = c("Melanoma", "Lung", "Bladder", "Kidney")
+tumors = c("Brain", "Ovary", "Pancreas")
 
 tumorous = ukb_dataF %>% 
   filter(cancer_type %in% tumors) %>% 

@@ -1,0 +1,133 @@
+---
+title: "B_013_Melanoma_Lysosomal_protein_PTV"
+output: html_document
+date: "2024-12-11"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+Packages <- c("tidyverse", "data.table", "magrittr", "clusterProfiler", "org.Hs.eg.db", "fastmatch", "future.apply")
+#"tidycmprsk", "Rfast", "survminer", "ggsurvfit", , , "ComplexHeatmap", "pbapply", "forestmodel", , "ggrepel", "ggsci", "scales", "ggpubr", "RColorBrewer", "survival"
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+```
+
+```{r}
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 %<>% select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+
+gene_symbols = bitr(geneID = sort(unique(unlist(strsplit(ptvb_MAF104$ptvgenes, ","), use.names = F))), fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+
+ukb_ptvENSG = as.list(ptvb_MAF104$ptvgenes)
+ukb_ptvENSG = lapply(ukb_ptvENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
+names(ukb_ptvENSG) = ptvb_MAF104$eid
+lengths(ukb_ptvENSG)[1:10]
+
+load("Objects/go_desc_list")
+go_desc_list = go_desc_list[lengths(go_desc_list) >= 5]
+names(go_desc_list) = gsub("[^[:alnum:] ]", "", names(go_desc_list))
+names(go_desc_list) = gsub(" ", "", names(go_desc_list))
+#ukb_ptvSYMBOL = lapply(ukb_ptvENSG, function(x) gene_symbols$SYMBOL[fmatch(x, gene_symbols$ENSEMBL)])
+
+plan(multisession(workers = 4))
+
+sort(unique(unlist(strsplit(names(go_desc_list), ""), use.names = F)))
+
+
+
+for(i in 1:length(go_desc_list)) {
+  tempensgs = gene_symbols$ENSEMBL[gene_symbols$SYMBOL %fin% go_desc_list[[i]]]
+  ptv_data = future_sapply(ukb_ptvENSG, function(u) {
+    sum(u %fin% )
+  })
+  saveRDS(object = ptv_data, file = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/013/PTV_GO")
+}
+
+```
+
+
+
+#Dataset
+
+```{r}
+ukb_data_raw = readRDS("Objects/ukb_data.rds")
+
+
+
+geg = fread("Variables/22006.txt") #caucasians
+ukb_dataF = ukb_data_raw %>% filter(eid %fin% as.character(geg$eid)) #425,654
+rm(geg)
+
+ukb_dataF$sex = factor(ukb_dataF$sex, levels = c(0,1), labels = c("female", "male"))
+ukb_dataF %<>% filter(s.color != "Black") #425,530
+ukb_dataF$s.color[ukb_dataF$s.color == "Do not know"] = NA
+ukb_dataF$s.color = factor(ukb_dataF$s.color, levels = c("Fair", "Dark olive", "Light olive", "Brown", "Very fair"))
+sel_gpcas = paste0("gpca", 1:20)
+
+ukb_dataF %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, c.occurences, cancer_type, s.color, all_of(sel_gpcas))
+ukb_dataF %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
+
+nottumorous_all = ukb_dataF %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  #filter(is.na(c.occurences)) %>% #New filtering step!!!
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1)
+
+melanoma = ukb_dataF %>% 
+  dplyr::filter(cancer_type == "Melanoma") %>% 
+  distinct(eid, .keep_all = T) %>%
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2)
+
+rm(ukb_data_raw, ukb_dataF)
+ukb_data = rbind(melanoma, nottumorous_all)
+```
+
+#MAF 10-4 PTV genes
+
+```{r}
+
+ukb_data$PTVgenes = ptvb_MAF104$Genes[fmatch(ukb_data$eid, ptvb_MAF104$Patient.ID)]
+
+genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb_MAF104$Genes, ","), use.names = F))))
+gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+rm(gene_symbols, ptvb_MAF104)
+```
+
+#Gene sets
+
+```{r}
+load("Objects/go_desc_list")
+go_desc_list = go_desc_list[grep("lysosom", names(go_desc_list), value = T)]
+ensgs_lysosome_all = sort(unique(unlist(go_desc_list, use.names = F)))
+go_desc_list = go_desc_list[lengths(go_desc_list) >= 5]
+
+#Match Hugo to ENSG
+go_desc_list_ensg = lapply(go_desc_list, function(x) {
+  g = genes_all$ENSEMBL[fmatch(x, genes_all$SYMBOL)]
+  g[!is.na(g)]
+})
+
+
+
+
+
+PTVmat = future_sapply(ukb_data$PTVgenes, function(x) {
+  g = strsplit(x, ",")[[1]]
+  future_sapply(go_desc_list_ensg, function(y) sum(g %fin% y))
+})
+dim(temp)
+temp = t(temp)
+colnames(temp) = gsub(",", "", gsub(" |-", "_", names(go_desc_list_ensg)))
+
+```
+

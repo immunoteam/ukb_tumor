@@ -8,8 +8,7 @@ date: "2024-11-04"
 
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
-library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db", "ggrepel", "ggsci", "scales", "ggpubr", "RColorBrewer")
+Packages <- c("tidyverse", "data.table", "magrittr", "tidycmprsk", "Rfast", "survminer", "ggsurvfit", "fastmatch", "future.apply", "ComplexHeatmap", "pbapply", "forestmodel", "clusterProfiler", "org.Hs.eg.db", "ggrepel", "ggsci", "scales", "ggpubr", "RColorBrewer", "survival")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
@@ -19,16 +18,21 @@ options(dplyr.summarise.inform = FALSE)
 #Datasets
 
 ```{r}
-load("Objects/ukb_data_cancer_final")
-sum(Table(ukb_data_cancer$cancer_type))
-ukb_data = ukb_data_cancer %>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10, gpca11, gpca12, gpca13, gpca14, gpca15, gpca16, gpca17, gpca18, gpca19, gpca20)
-rm(ukb_data_cancer)
-ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
-ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
-ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
-ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
-ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
-ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
+ukb_data_raw = readRDS("Objects/ukb_data.rds")
+geg = fread("Variables/22006.txt") #caucasians
+ukb_dataF = ukb_data_raw %>% 
+  filter(eid %fin% as.character(geg$eid))
+rm(geg)
+
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Brain/CNS"] = "Brain"
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_dataF$sex = factor(ukb_dataF$sex, levels = c(0,1), labels = c("female", "male"))
+sel_gpcas = paste0("gpca", 1:20)
+
+ukb_dataF %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, all_of(sel_gpcas))
+ukb_dataF %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.)))
 ```
 
 
@@ -36,8 +40,31 @@ ukb_data %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any
 
 ```{r}
 ptvb_synonym = fread("PTVvars/all_variants_synonymous_all_retained_variants_synonymous_only_SynonymousBurden_first_3_columns.tsv")
-ukb_data$PTVburden = ptvb_synonym$Number.of.Genes[fmatch(ukb_data$eid, ptvb_synonym$Patient.ID)]
-ukb_data$PTVburden = ptvb_synonym$`Number.of.Variants.(synonymous burden)`[fmatch(ukb_data$eid, ptvb_synonym$Patient.ID)]
+ukb_dataF$SYNburden = ptvb_synonym$Number.of.Genes[fmatch(ukb_dataF$eid, ptvb_synonym$Patient.ID)]
+#ukb_data$PTVburden = ptvb_synonym$`Number.of.Variants.(synonymous burden)`[fmatch(ukb_data$eid, ptvb_synonym$Patient.ID)]
+```
+
+
+#Tumor frequency in the UKB
+
+```{r}
+tumors = sort(unique(ukb_dataF$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_dataF %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    nrow()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n")
+
+tumors = unique(tumor_freq_data$cancer_type)#
+
 ```
 
 #Function
@@ -61,44 +88,51 @@ myFunCoxStats = function(dataset, tumor, gender) {
     )) %>% 
     mutate(status = 1)
   dataset2 = rbind(tumorous, nottumorous)
-  res.cox <- coxph(Surv(time, status) ~ PTVburden + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10 + gpca11 + gpca12 + gpca13 + gpca14 + gpca15 + gpca16 + gpca17 + gpca18 + gpca19 + gpca20, data = dataset2, id = dataset2$eid)
+  
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("SYNburden", sel_gpcas), collapse = "+")))
+  res.cox <- coxph(myformula, data = dataset2, id = dataset2$eid)
+  
   out = as.numeric(rbind(summary(res.cox)$coefficients[,"exp(coef)"], summary(res.cox)$coefficients[,"Pr(>|z|)"]))
-  names(out)[1:2] = c("hr_PTVburdenG", "p_PTVburdenG")
-  names(out)[seq(3,length(out),2)] = paste0("hr_gpca_", 1:20)
-  names(out)[seq(4,length(out),2)] = paste0("p_gpca_", 1:20)
+  names(out)[1:2] = c("hr_SYNburden", "p_SYNburden")
+  names(out)[seq(3,length(out),2)] = paste0("hr_gpca_", 1:length(sel_gpcas))
+  names(out)[seq(4,length(out),2)] = paste0("p_gpca_", 1:length(sel_gpcas))
   return(out)
 }
 
 ```
 
-#Tumor frequency in the UKB
 
 ```{r}
-tumor_freq_data = expand.grid(cancer_type = sort(unique(ukb_data$cancer_type)), sex = c("female", "male"), stringsAsFactors = F)
-tumor_freq_data = tumor_freq_data[!tumor_freq_data$cancer_type %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"),]
-tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
-  ukb_data %>% 
-    filter(cancer_type == x[1], sex == x[2]) %>% 
-    arrange(diag_date) %>% 
-    distinct(eid, .keep_all = T) %>% 
-    nrow()
-})
-tumor_freq_data %<>% 
-  filter(n>=100) %>% 
-  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n")
-
-```
-
-
-```{r}
-myFunCoxStats(dataset = ukb_data, tumor = tumor_freq_data$cancer_type[1], gender = tumor_freq_data$sex[1])
+myFunCoxStats(dataset = ukb_dataF, tumor = tumor_freq_data$cancer_type[1], gender = tumor_freq_data$sex[1])
 
 coxstats = apply(X = tumor_freq_data, MARGIN = 1, FUN = function(x) {
-  myFunCoxStats(dataset = ukb_data, tumor = x[1], gender = x[2])
+  myFunCoxStats(dataset = ukb_dataF, tumor = x[1], gender = x[2])
 })
 res = cbind(tumor_freq_data, t(coxstats))
 
-save(res, file = "Res/008/cox_models_syn_mut_nb_of_genes")
-save(res, file = "Res/008/cox_models_syn_mut_nb_of_variant")
+save(res, file = "Res/008/cox_models_syn_mut_tumor_gender")
+
+load("Res/008/cox_models_syn_mut_tumor_gender")
+```
+
+```{r}
+ukb_dataF %>% 
+  filter(cancer_type %in% tumors) %>% 
+  mutate(cancer_typeFAC = factor(cancer_type)) %>% 
+  mutate(cancer_typeFAC = reorder(cancer_typeFAC, PTVburden, median)) %>% 
+  ggplot(aes(x = cancer_typeFAC, y = PTVburden, fill = death)) + 
+  geom_boxplot()
+
+ukb_dataF %>% 
+  filter(cancer_type %in% tumors) %>% 
+  mutate(cancer_typeFAC = factor(cancer_type)) %>% 
+  mutate(cancer_typeFAC = reorder(cancer_typeFAC, PTVburden, median)) %>% 
+  ggplot(aes(x = death, y = PTVburden)) + 
+  geom_boxplot() + 
+  facet_wrap(~cancer_typeFAC, scales = "free_y") +
+  stat_compare_means(label.y.npc = .8, label.x.npc = "center")
+
+
+
 ```
 

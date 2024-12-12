@@ -252,21 +252,18 @@ ukb_data %<>% left_join(ptvb_data, by = "eid")
 saveRDS(ukb_data, file = "Objects/ukb_data.rds")
 ```
 
-#MAF from UKB
+#Synonimous burden
 
 ```{r}
-#Load PTV burden data
-ptvb = fread("PTVvars/PTVburden_without_MAF-001/PTVburden_without_MAF-001.tsv")
-plan(multisession(workers = 4))
-ptv_freq = Table(unlist(future_lapply(ptvb$Variants, function(x) strsplit(x, ",")[[1]]), use.names = F))
-m = round(nrow(ptvb)/10000)
-gc()
+ptvb_synonym = fread("PTVvars/all_variants_synonymous_all_retained_variants_synonymous_only_SynonymousBurden_first_3_columns.tsv")
+load("Objects/goterm_tbl")
 
-ukb_data = readRDS("Objects/ukb_data.rds")
-ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
-ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
-ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
-ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
-ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+genes_all = data.frame(ENSEMBL = sort(unique(unlist(strsplit(ptvb_synonym$Genes, ","), use.names = F))))
+gene_symbols = bitr(geneID = genes_all$ENSEMBL, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+genes_all$SYMBOL = gene_symbols$SYMBOL[fmatch(genes_all$ENSEMBL, gene_symbols$ENSEMBL)]
+rm(gene_symbols)
+
+genes_immune = genes_all %>% filter(SYMBOL %in% goterm_tbl$Gene[grepl("immune", goterm_tbl$GO_description)]) #1120
+
 ```
 
