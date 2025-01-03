@@ -1,0 +1,105 @@
+---
+title: "myfun_beta"
+author: "Bagi Laura"
+date: "2024-11-13"
+output: html_document
+---
+
+#Balázs function
+```{r}
+
+myFunForestPlot = function(dataset, geneset, tumor, gender, gpca_nb = 10, threads) {
+  #plan(future::cluster, workers = threads)
+  dataset$PTVburden = sapply(dataset$PTVgenes, function(x) {
+    g = strsplit(x, ",")[[1]]
+    sum(g %fin% geneset)
+  })
+  tumorous = dataset %>% 
+    dplyr::filter(cancer_type %in% tumor) %>% 
+    dplyr::filter(sex %in% gender) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 2)
+  nottumorous = dataset %>% 
+    dplyr::filter(cancer_type == "No_cancer") %>%
+    dplyr::filter(sex %in% gender) %>%
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+    )) %>% 
+    mutate(status = 1)
+  dataset2 = rbind(tumorous, nottumorous)
+  dataset2$PTVburdenG = as.factor(ifelse(dataset2$PTVburden == 0, 0, 1))
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, sex, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 1) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] == 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
+  } else {
+    dataset2 %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(dataset2)[4:ncol(dataset2)], collapse = "+")))
+  res.cox <- coxph(myformula, data = dataset2, id = dataset2$eid)
+  fm = forest_model(model = res.cox, return_data = T)
+  if(length(gender) == 2) {
+    tt = paste0(tumor, ", BOTH")
+  } else {
+    tt = paste0(tumor, ", ", gender)
+  }
+  fm$plot + labs(title = tt)
+}
+
+myFunCoxStats = function(dataset, geneset, tumor, gender, gpca_nb = 10, threads) {
+  #plan(future::cluster, workers = threads)
+  #plan(multisession(workers = threads))
+  dataset$PTVburden = sapply(dataset$PTVgenes, function(x) {
+    g = strsplit(x, ",")[[1]]
+    sum(g %fin% geneset)
+  })
+  tumorous = dataset %>% 
+    dplyr::filter(cancer_type %in% tumor) %>% 
+    dplyr::filter(sex %in% gender) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 2)
+  nottumorous = dataset %>% 
+    dplyr::filter(cancer_type == "No_cancer") %>%
+    dplyr::filter(sex %in% gender) %>%
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+    )) %>% 
+    mutate(status = 1)
+  dataset2 = rbind(tumorous, nottumorous)
+  dataset2$PTVburdenG = as.factor(ifelse(dataset2$PTVburden == 0, 0, 1))
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, sex, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] != 0 & length(gender) == 1) {
+    dataset2 %<>% dplyr::select(eid, time, status, PTVburdenG, all_of(sel_gpcas))
+  } else if(table(dataset2$PTVburdenG[dataset2$cancer_type != "No_cancer"])["1"] == 0 & length(gender) == 2) {
+    dataset2 %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
+  } else {
+    dataset2 %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(dataset2)[4:ncol(dataset2)], collapse = "+")))
+  res.cox <- coxph(myformula, data = dataset2, id = dataset2$eid)
+  coefs = summary(res.cox)$coefficients[,"exp(coef)"]
+  names(coefs) = paste0("hr_", names(coefs))
+  pvalues = summary(res.cox)$coefficients[,"Pr(>|z|)"]
+  names(pvalues) = paste0("p_", names(pvalues))
+  out = c(coefs, pvalues)
+  return(out)
+}
+
+
+```
+

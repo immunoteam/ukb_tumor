@@ -171,6 +171,8 @@ load("C:/Users/bagil/Desktop/ukb/objects/ukb_data_1")
 histology_of_cancer = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40011.txt", header = T) #40011
 type_of_cancer = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40006.txt", header = T) #40006
 date_of_cancer_diag = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40005.txt", header = T) #40005
+behaviour_of_t = fread("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40012.txt")
+meta = fread("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40009.txt")
 
 
 plan(multisession)
@@ -1650,4 +1652,40 @@ print(cuminc_heatmap)
 dev.off()
 
 ```
+
+#Caucasian & synonym burden
+```{r}
+
+caucasian = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/22006.txt", header = T) #22006
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_ptv")
+synonym = read_tsv("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/all_variants_synonymous_all_retained_variants_synonymous_only_SynonymousBurden_first_3_columns.tsv", show_col_types = F)
+
+ukb_data$caucasian = caucasian$value[fmatch(ukb_data$eid, caucasian$eid)]
+ukb_data$caucasian[is.na(ukb_data$caucasian)] = 0
+ukb_data$synonym_burden = synonym$"Number.of.Genes"[fmatch(ukb_data$eid, synonym$Patient.ID)]
+
+rm(caucasian, synonym)
+
+save(ukb_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_ptv")
+
+```
+
+#Metastatic
+```{r}
+
+tumor_o = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40009.txt", header = T) #40009 
+tumor_behaviour = read.table("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40012.txt", header = T) #40012
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_ptv")
+
+
+ukb_data$cancer_behaviour = tumor_behaviour$value[fmatch(ukb_data$eid, tumor_behaviour$eid)]
+ukb_data$metastati_tumor = ifelse(ukb_data$cancer_behaviour == 6, T, F)
+
+save(ukb_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_ptv")
+
+```
+
+
+
+
 

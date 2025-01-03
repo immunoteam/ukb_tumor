@@ -5863,100 +5863,127 @@ dev.off()
 ##Uni and special
 ```{r}
 
-#Load
-load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_cancer_final")
 
-#Make table
-cuminc_table = ukb_data_cancer %>% select(eid, birthdate, sex, ethnic_group, attending_1,diag_date, date_of_death, death, cancer_type, PTV_burden_raw, PTV_uni_raw1, PTV_uni_raw2, PTVim_raw1, PTVim_raw2, PTVpli_raw1, PTVpli_raw2, PTVtsg_raw1, PTVtsg_raw2, PTV_burden_MAF, PTV_uni_MAF1, PTV_uni_MAF2, PTVim_MAF, PTVpli_MAF, PTVtsg_MAF)
-rm(ukb_data_cancer)
-cuminc_table$cancer_type[is.na(cuminc_table$cancer_type)] = "No_cancer"
-cuminc_table$gender = ifelse(cuminc_table$sex == 0, "female", "male")
-tumors_all = unique(cuminc_table$cancer_type)
-tumors = tumors_all[!(tumors_all %in% c("No_cancer", "Hydatidiform_mole", "Mesothelioma", "Esophagus", "Testis", "undef", "other", "Benign"))]
-tumors = sort(tumors)
-rm(tumors_all)
-PTV_types = grep("PTV", colnames(cuminc_table), value = T)
-PTV_types = PTV_types[!(PTV_types %in% c("PTV_burden_raw", "PTV_burden_MAF"))]
+#Loads
+ukb_data = readRDS("objects/ukb_data.rds")
+#Edits
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+#Cause of death
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
+ukb_data$cause_of_death = substr(ukb_data$cause_of_death, 1, 3)
+ukb_data$death_type = icd_mapping$cancer_type[fmatch(ukb_data$cause_of_death, icd_mapping$ICD10)]
+ukb_data$death_type[ukb_data$death_type == "Brain/CNS"] = "Brain"
+ukb_data$death_type[ukb_data$death_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$death_type[ukb_data$death_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$death_type[ukb_data$death_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$death_type[is.na(ukb_data$death_type)] = "No_cancer"
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes_", ptvs)]
+ptvs = ptvs[!(ptvs %in% c("PTV", "PTVim", "PTVtsg", "PTVpli", "PTV_MAF", "PTVim_MAF", "PTVtsg_MAF", "PTVpli_MAF"))]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  pivot_wider(id_cols = cancer_type, names_from = sex, values_from = n)
+
+
+tumors = tumor_freq_data$cancer_type
+tumorous_all = ukb_data %>% 
+      filter(cancer_type %in% tumors) %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, death_type, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+nottumorous_all = ukb_data %>% 
+      filter(cancer_type == "No_cancer") %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, death_type, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
 
 #Lapply
 n = 0
 m = 0
+plan(multisession(workers = 3))
 
-ptv_pvals_all = lapply(X = PTV_types, FUN = function(x){
+greyres = pblapply(ptvs, function(p){
   n = n + 1
   .GlobalEnv$n = n
-  cuminc_table_f = cuminc_table %>% select(eid, birthdate, ethnic_group, attending_1,diag_date, date_of_death, death, cancer_type, gender, PTV_burden_raw, PTV_burden_MAF, all_of(x))
-  colnames(cuminc_table_f)[12] = "PTV_group"
-  pvals_list = lapply(X = tumors, FUN = function(i){
+  pvals_list = pbsapply(tumor_freq_data$cancer_type, function(t){
     m = m + 1
     .GlobalEnv$m = m
-    tempdf_x = subset(cuminc_table_f, cancer_type == i)
-    tempdf_x = dplyr::arrange(tempdf_x, diag_date)
-    tempdf_x = tempdf_x[!duplicated(tempdf_x$eid), ]
-    tempdf_x %<>% mutate(inc_age = round(as.numeric((diag_date - birthdate))/365.25))
-    gender_counts = table(tempdf_x$gender)
-    #l = sort(unique(tempdf_x$PTV_group))
-    #cp = unique(sort(unlist(sapply(X = l, FUN = function(y) {sapply(X = strsplit(as.character(y), ",")[[1]], FUN = function(a) as.numeric(str_extract(a, "\\d+")))}))))
-    tempdf_no_x = subset(cuminc_table_f, cancer_type != i)
-    tempdf_no_x = tempdf_no_x[!duplicated(tempdf_no_x$eid), ]
-    tempdf_no_x %<>% mutate(inc_age = case_when(
-      death == T ~ round(as.numeric(date_of_death - birthdate)/365.25),
-      death == F ~ round(as.numeric(max(date_of_death, na.rm = T) - birthdate)/365.25),
-    ))
-    unique_tempdf = rbind(tempdf_x, tempdf_no_x)
-    #max_number = max(unique_tempdf$PTV_burden, na.rm = TRUE)
-    #cp[length(cp)] = max_number
-    #unique_tempdf$PTV_group = cut(unique_tempdf$PTV_burden, breaks = cp, include.lowest = T, right = T)
-    unique_tempdf$inc_event = as.factor(ifelse(unique_tempdf$cancer_type == i, 1, 0))
-    unique_tempdf$gender = as.factor(unique_tempdf$gender)
-    if (length(gender_counts) == 2 & all(gender_counts >= 10)) {
-      grayp_f = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
-      stat_f = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "female",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
-      grayp_m = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
-      stat_m = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+    tumorous = tumorous_all %>% 
+      filter(cancer_type == t[1]) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric((diag_date - birthdate)))
+    nottumorous = nottumorous_all %>% 
+      filter(!eid %in% tumorous$eid) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = case_when(
+        death == T ~ as.numeric(date_of_death - birthdate),
+        death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+      ))
+    tempdfU = rbind(tumorous, nottumorous)
+    tempdfU$inc_event = as.factor(ifelse(tempdfU$cancer_type == t, 1, 0))
+    tempdfU %<>% dplyr::select(eid, time, inc_event, sex, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+    colnames(tempdfU)[5] = "PTVvar"
+    sex_counts = table(tumorous$sex)
+    tempdfU$sex = as.factor(tempdfU$sex)
+    if (length(sex_counts) == 2 & all(sex_counts >= 50)) {
+      grayp_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+      grayp_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
       #difference of incidences
-      temp_f =  tbl_cuminc(x = cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "female",]), times = 60)
+      temp_f =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",]), times = 60)
       inc_60_f_low = as.numeric(gsub("% \\(.*", "", temp_f$table_body[2,"stat_1", drop = T]))
       inc_60_f_high = as.numeric(gsub("% \\(.*", "", temp_f$table_body[3,"stat_1", drop = T]))
       inc_60_f_dif = inc_60_f_high - inc_60_f_low
       grayp_f = ifelse(inc_60_f_dif > 0, grayp_f, 0 - grayp_f)
-      temp_m =  tbl_cuminc(x = cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",]), times = 60)
+      temp_m =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",]), times = 60)
       inc_60_m_low = as.numeric(gsub("% \\(.*", "", temp_m$table_body[2,"stat_1", drop = T]))
       inc_60_m_high = as.numeric(gsub("% \\(.*", "", temp_m$table_body[3,"stat_1", drop = T]))
       inc_60_m_dif = inc_60_m_high - inc_60_m_low
       grayp_m = ifelse(inc_60_m_dif > 0, grayp_m, 0 - grayp_m)
-    } else if ("female" %in% names(gender_counts) && gender_counts["female"] >= 10) {
-      grayp_f = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
-      stat_f = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "female",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
-      grayp_m = "No data"
-      stat_m = "No data"
-      temp_f =  tbl_cuminc(x = cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "female",]), times = 60)
+    } else if ("female" %in% names(sex_counts) && sex_counts["female"] >= 50) {
+      grayp_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+      grayp_m = "No_data"
+      stat_m = "No_data"
+      temp_f =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",]), times = 60)
       inc_60_f_low = as.numeric(gsub("% \\(.*", "", temp_f$table_body[2,"stat_1", drop = T]))
       inc_60_f_high = as.numeric(gsub("% \\(.*", "", temp_f$table_body[3,"stat_1", drop = T]))
       inc_60_f_dif = inc_60_f_high - inc_60_f_low
       grayp_f = ifelse(inc_60_f_dif > 0, grayp_f, 0 - grayp_f)
-    } else if ("male" %in% names(gender_counts) && gender_counts["male"] >= 10) {
-      grayp_m = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
-      stat_m = tidycmprsk::cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+    } else if ("male" %in% names(sex_counts) && sex_counts["male"] >= 50) {
+      grayp_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
       grayp_f = "No data"
       stat_f = "No data"
-      temp_m =  tbl_cuminc(x = cuminc(Surv(inc_age, inc_event) ~ PTV_group, data = unique_tempdf[unique_tempdf$gender == "male",]), times = 60)
+      temp_m =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",]), times = 60)
       inc_60_m_low = as.numeric(gsub("% \\(.*", "", temp_m$table_body[2,"stat_1", drop = T]))
       inc_60_m_high = as.numeric(gsub("% \\(.*", "", temp_m$table_body[3,"stat_1", drop = T]))
       inc_60_m_dif = inc_60_m_high - inc_60_m_low
       grayp_m = ifelse(inc_60_m_dif > 0, grayp_m, 0 - grayp_m)
-    } else { message("Not enough data for either gender.")}
-    columns = c(paste(i, "_est_F", sep = " "), paste(i, "_pvalue_F", sep = " "), paste(i, "_est_M", sep = " "), paste(i, "_pvalue_M", sep = " "))
+    } else { message("Not enough data for either sex.")}
+    columns = c(paste(t, "_est_F", sep = " "), paste(t, "_pvalue_F", sep = " "), paste(t, "_est_M", sep = " "), paste(t, "_pvalue_M", sep = " "))
     gray_values = data.frame(matrix(c(stat_f, grayp_f, stat_m, grayp_m), nrow = 1))
     #pval_df = as.data.frame(matrix(gray_pvals, nrow = 1))
-    rownames(gray_values) = x
+    rows = p
+    rownames(gray_values) = rows
     colnames(gray_values) = columns
     gray_values
-  })
-  pvals_df = bind_cols(pvals_list)
+  }, simplify = F)
+  out = do.call(cbind, pvals_list)
 })  
 
-cuminc_pvals_df_all = bind_rows(ptv_pvals_all) 
+cuminc_pvals = as.data.frame(greyres)
+cuminc_pvals_df_all = do.call(rbind, greyres) 
 save(cuminc_pvals_df_all, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cuminc_pvals_df_all")
 
 
@@ -6355,7 +6382,214 @@ dev.off()
 
 
 #New dataset
-##RUN THIS - Graycox
+##Cumulative incidenc
+```{r}
+
+#Loads
+ukb_data = readRDS("objects/ukb_data.rds")
+#Edits
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+#Cause of death
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
+ukb_data$cause_of_death = substr(ukb_data$cause_of_death, 1, 3)
+ukb_data$death_type = icd_mapping$cancer_type[fmatch(ukb_data$cause_of_death, icd_mapping$ICD10)]
+ukb_data$death_type[ukb_data$death_type == "Brain/CNS"] = "Brain"
+ukb_data$death_type[ukb_data$death_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$death_type[ukb_data$death_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$death_type[ukb_data$death_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$death_type[is.na(ukb_data$death_type)] = "No_cancer"
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes_", ptvs)]
+ptvs = ptvs[!(ptvs %in% c("PTV", "PTVim", "PTVtsg", "PTVpli", "PTV_MAF", "PTVim_MAF", "PTVtsg_MAF", "PTVpli_MAF"))]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  pivot_wider(id_cols = cancer_type, names_from = sex, values_from = n)
+
+
+tumors = tumor_freq_data$cancer_type
+tumorous_all = ukb_data %>% 
+      filter(cancer_type %in% tumors) %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, death_type, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+nottumorous_all = ukb_data %>% 
+      filter(cancer_type == "No_cancer") %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, diag_date, cancer_type, death_type, all_of(ptvs), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+
+#Lapply
+n = 0
+m = 0
+plan(multisession(workers = 3))
+
+greyres = pblapply(ptvs, function(p){
+  n = n + 1
+  .GlobalEnv$n = n
+  pvals_list = pbsapply(tumor_freq_data$cancer_type, function(t){
+    m = m + 1
+    .GlobalEnv$m = m
+    tumorous = tumorous_all %>% 
+      filter(cancer_type == t[1]) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric((diag_date - birthdate)))
+    nottumorous = nottumorous_all %>% 
+      filter(!eid %in% tumorous$eid) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = case_when(
+        death == T ~ as.numeric(date_of_death - birthdate),
+        death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+      ))
+    tempdfU = rbind(tumorous, nottumorous)
+    tempdfU$inc_event = as.factor(ifelse(tempdfU$cancer_type == t, 1, 0))
+    tempdfU %<>% dplyr::select(eid, time, inc_event, sex, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+    colnames(tempdfU)[5] = "PTVvar"
+    sex_counts = table(tumorous$sex)
+    tempdfU$sex = as.factor(tempdfU$sex)
+    if (length(sex_counts) == 2 & all(sex_counts >= 50)) {
+      grayp_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+      grayp_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+      #difference of incidences
+      temp_f =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",]), times = 60)
+      inc_60_f_low = as.numeric(gsub("% \\(.*", "", temp_f$table_body[2,"stat_1", drop = T]))
+      inc_60_f_high = as.numeric(gsub("% \\(.*", "", temp_f$table_body[3,"stat_1", drop = T]))
+      inc_60_f_dif = inc_60_f_high - inc_60_f_low
+      grayp_f = ifelse(inc_60_f_dif > 0, grayp_f, 0 - grayp_f)
+      temp_m =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",]), times = 60)
+      inc_60_m_low = as.numeric(gsub("% \\(.*", "", temp_m$table_body[2,"stat_1", drop = T]))
+      inc_60_m_high = as.numeric(gsub("% \\(.*", "", temp_m$table_body[3,"stat_1", drop = T]))
+      inc_60_m_dif = inc_60_m_high - inc_60_m_low
+      grayp_m = ifelse(inc_60_m_dif > 0, grayp_m, 0 - grayp_m)
+    } else if ("female" %in% names(sex_counts) && sex_counts["female"] >= 50) {
+      grayp_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_f = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+      grayp_m = "No_data"
+      stat_m = "No_data"
+      temp_f =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "female",]), times = 60)
+      inc_60_f_low = as.numeric(gsub("% \\(.*", "", temp_f$table_body[2,"stat_1", drop = T]))
+      inc_60_f_high = as.numeric(gsub("% \\(.*", "", temp_f$table_body[3,"stat_1", drop = T]))
+      inc_60_f_dif = inc_60_f_high - inc_60_f_low
+      grayp_f = ifelse(inc_60_f_dif > 0, grayp_f, 0 - grayp_f)
+    } else if ("male" %in% names(sex_counts) && sex_counts["male"] >= 50) {
+      grayp_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"pv"] %>% round(digits = 6)
+      stat_m = tidycmprsk::cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",])$cmprsk$Tests[,"stat"] %>% round(digits = 3)
+      grayp_f = "No data"
+      stat_f = "No data"
+      temp_m =  tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVvar, data = tempdfU[tempdfU$sex == "male",]), times = 60)
+      inc_60_m_low = as.numeric(gsub("% \\(.*", "", temp_m$table_body[2,"stat_1", drop = T]))
+      inc_60_m_high = as.numeric(gsub("% \\(.*", "", temp_m$table_body[3,"stat_1", drop = T]))
+      inc_60_m_dif = inc_60_m_high - inc_60_m_low
+      grayp_m = ifelse(inc_60_m_dif > 0, grayp_m, 0 - grayp_m)
+    } else { message("Not enough data for either sex.")}
+    columns = c(paste(t, "_est_F", sep = " "), paste(t, "_pvalue_F", sep = " "), paste(t, "_est_M", sep = " "), paste(t, "_pvalue_M", sep = " "))
+    gray_values = data.frame(matrix(c(stat_f, grayp_f, stat_m, grayp_m), nrow = 1))
+    #pval_df = as.data.frame(matrix(gray_pvals, nrow = 1))
+    rows = p
+    rownames(gray_values) = rows
+    colnames(gray_values) = columns
+    gray_values
+  }, simplify = F)
+  out = do.call(cbind, pvals_list)
+})  
+
+cuminc_pvals = as.data.frame(greyres)
+cuminc_pvals_df_all = do.call(rbind, greyres) 
+save(cuminc_pvals_df_all, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cuminc_pvals_df_all")
+
+```
+
+###Heatmap
+```{r}
+
+#Heatmap librarys
+library(pheatmap)
+library(RColorBrewer)
+library(circlize)
+library(dendsort)
+
+#Load
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/cuminc_pvals_df_all")
+ukb_data = readRDS("objects/ukb_data.rds")
+#Edits
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes_", ptvs)]
+ptvs = ptvs[!(ptvs %in% c("PTV", "PTVim", "PTVtsg", "PTVpli", "PTV_MAF", "PTVim_MAF", "PTVtsg_MAF", "PTVpli_MAF"))]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+coef_df = cuminc_pvals_df_all %>% 
+  select(contains("_est_"))
+
+pval_df = cuminc_pvals_df_all %>% 
+  select(contains("_pvalue_"))
+
+#Heatmap
+dataForHm = matrix(data = NA, nrow = length(rownames(coef_df)), ncol = length(colnames(coef_df)), dimnames = list(rownames(coef_df), colnames(coef_df)))
+for (i in seq_len(nrow(coef_df))) {
+  for (j in seq_len(ncol(coef_df))) {
+    # Check if the value in coef_df is less than 0.05
+    if (pval_df[i, j] < 0.05) {
+      dataForHm[i, j] <- coef_df[i, j]
+    }
+  }
+}
+
+
+#P-values
+dataForHmP = matrix(data = NA, nrow = length(rownames(pval_df)), ncol = length(colnames(pval_df)), dimnames = list(rownames(pval_df), colnames(pval_df)))
+for (i in seq_len(nrow(pval_df))) {
+  for (j in seq_len(ncol(pval_df))) {
+    # Check if the value in coef_df is less than 0.05
+    if (pval_df[i, j] < 0.05 & pval_df[i, j] >= 0) {
+      dataForHmP[i, j] <- pval_df[i, j]
+    }
+  }
+}
+
+png(filename = "Plots/incidence_cox_analysis_1/heatmap_cox_model_withgender.png", width = 30, height = 20, units = "cm", res = 300)
+hm = ComplexHeatmap::Heatmap(matrix = dataForHm, 
+                             name = "Coefficient", 
+                             na_col = "gray",
+                             col = colorRamp2(c(-2, 0, 2), c("green", "white", "red")),
+                             cluster_columns = F, 
+                             cluster_rows = F, 
+                             rect_gp = gpar(col = "black", lwd = 1), 
+                             cell_fun = function(j, i, x, y, width, height, fill) {
+                               if (!is.na(dataForHmP[i, j]) && is.numeric(dataForHmP[i, j])) {
+                                 grid.text(sprintf("%.3f", dataForHmP[i, j]), x, y, gp = gpar(fontsize = 8))}})
+draw(hm)
+dev.off()
+                             
+
+
+```
+
+###Vulcano plot
+```{r}
+
+
+
+```
+
+
+##Graycox
 ```{r}
 
 
@@ -6366,6 +6600,7 @@ ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymph
 ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
 ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
 ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+ukb_data$can_death = ifelse(grepl("^C", ukb_data$cause_of_death), T, F)
 
 ptvs = grep("PTV", colnames(ukb_data), value = T)
 ptvs = ptvs[!grepl("Genes_", ptvs)]
@@ -6474,4 +6709,165 @@ draw(hm)
 dev.off()
 
 ```
+
+
+```{r}
+
+#Loads
+ukb_data = readRDS("objects/ukb_data.rds")
+sinon = fread("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/all_variants_synonymous_all_retained_variants_synonymous_only_SynonymousBurden_first_3_columns.tsv")
+ukb_data$synmut = sinon$Number.of.Genes[fmatch(ukb_data$eid, sinon$Patient.ID)]
+
+#Edits
+ukb_data$cancer_type[ukb_data$cancer_type == "Brain/CNS"] = "Brain"
+ukb_data$cancer_type[ukb_data$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$cancer_type[ukb_data$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+
+#Cause of death
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
+ukb_data$cause_of_death = substr(ukb_data$cause_of_death, 1, 3)
+ukb_data$death_type = icd_mapping$cancer_type[fmatch(ukb_data$cause_of_death, icd_mapping$ICD10)]
+ukb_data$death_type[ukb_data$death_type == "Brain/CNS"] = "Brain"
+ukb_data$death_type[ukb_data$death_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_data$death_type[ukb_data$death_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_data$death_type[ukb_data$death_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+ukb_data$death_type[is.na(ukb_data$death_type)] = "No_cancer"
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes_", ptvs)]
+ptvs = ptvs[!(ptvs %in% c("PTV", "PTVim", "PTVtsg", "PTVpli", "PTV_MAF", "PTVim_MAF", "PTVtsg_MAF", "PTVpli_MAF"))]
+
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+max_d_date = max(ukb_data$date_of_death, na.rm = T)
+
+tumorous_d = tumorous_all %>% 
+  filter(cancer_type == t & death_type == t) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric(date_of_death - diag_date))
+tumorous_alive = tumorous_all %>% 
+  filter(cancer_type == t & death == F) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric(max_d_date - diag_date))
+tempdfU = bind_rows(tumorous_d, tumorous_alive)
+tempdfU$status = as.numeric(ifelse(tempdfU$death == T, 1, 0))
+tempdfU %<>% dplyr::select(eid, time, status, sex, all_of(p), gpca1, gpca2, gpca3, gpca4, gpca5, gpca6, gpca7, gpca8, gpca9, gpca10)
+colnames(tempdfU)[5] = "PTVvar"
+
+tempdfU$status = as.factor(tempdfU$status)
+tempdfU$sex = as.factor(tempdfU$sex)
+tempdfU$PTVvar = as.factor(tempdfU$PTVvar)
+res.surv = crr(Surv(time, status) ~ PTVvar + sex + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = tempdfU, id = tempdfU$eid)
+
+
+#Plot
+tempdfU$status = as.numeric(tempdfU$status)
+ggsurvplot(survfit(Surv(time, status) ~ PTVvar, data = tempdfU), data = tempdfU, pval = T)
+
+
+```
+
+#Metastatic incedence FG-model
+```{r}
+
+#Loads
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_ptv")
+ukb_data$sex = factor(ukb_data$sex, levels = c(0,1), labels = c("female", "male"))
+ukb_data$caucasian = factor(ukb_data$caucasian, levels = c(0,1), labels = c("not_caucasian", "caucasian"))
+
+ptvs = grep("PTV", colnames(ukb_data), value = T)
+ptvs = ptvs[!grepl("Genes_", ptvs)]
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  pivot_wider(id_cols = cancer_type, names_from = sex, values_from = n) 
+
+gpca = paste0("gpca", 1:10)
+
+tumorous_all = ukb_data %>% 
+      filter(cancer_type %in% tumors) %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, age_at_cancer, caucasian, metastati_tumor, diag_date, cancer_type, death_type, all_of(ptvs), all_of(gpca))
+nottumorous_all = ukb_data %>% 
+      filter(cancer_type == "No_cancer") %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, age_at_cancer, metastati_tumor, caucasian, diag_date, cancer_type, death_type, all_of(ptvs), all_of(gpca))
+
+
+i = 0
+n = 0
+out_dir = "plots/Survival/"
+pdf_width = 8
+pdf_height = 10
+max_d_date = max(ukb_data$date_of_death, na.rm = T)
+
+plan(multisession(workers = 3))
+res = pblapply(ptvs, function(p) {
+  i=i+1
+  .GlobalEnv$i = i
+  pdf_filename = paste0(out_dir, "forest_surv_", p, ".pdf")
+  pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+  tumors_survres = pblapply(tumor_freq_data$cancer_type, function(t) {
+    n=n+1
+  .GlobalEnv$n = n
+    tumorous_meta = tumorous_all %>% 
+      filter(cancer_type == t & metastati_tumor == T) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric(date_of_death - diag_date))
+    tumorous_notmeta = tumorous_all %>% 
+      filter(cancer_type == t & metastati_tumor == F) %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric(max_d_date - diag_date))
+    nottumorous = nottumorous_all %>% 
+      filter(cancer_type == "No_cancer") %>% 
+      arrange(diag_date) %>% 
+      distinct(eid, .keep_all = T) %>% 
+      mutate(time = as.numeric(date_of_death - diag_date))
+    tempdfU = bind_rows(tumorous_meta, tumorous_notmeta, nottumorous)
+    tempdfU = tempdfU %>% 
+      mutate(status = case_when(
+        cancer_type == "No_cancer" ~ 0,
+        metastati_tumor == T & cancer_type == t ~ 1,
+        metastati_tumor == F & cancer_type == t ~ 2
+      ))
+    tempdfU %<>% dplyr::select(eid, time, status, sex, all_of(p), age_at_cancer, metastati_tumor, all_of(gpca))
+    colnames(tempdfU)[5] = "PTVvar"
+    tempdfU$status = as.factor(tempdfU$status)
+    sex_counts = table(tempdfU$sex)
+    if (length(sex_counts) == 2 & all(sex_counts >= 50) & length(table(tempdfU$status)) == 3){
+      myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdfU)[4:ncol(tempdfU)], collapse = "+")))
+      res.inc = crr(myformula, data = tempdfU, id = tempdfU$eid)
+    } else if ("female" %in% names(sex_counts) & sex_counts["female"] >= 50 & length(table(tempdfU$status)) == 3) {
+      myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdfU)[5:ncol(tempdfU)], collapse = "+")))
+      res.inc = crr(myformula, data = tempdfU %>% filter(sex == "female"), id = tempdfU$eid)
+    } else if ("male" %in% names(sex_counts) & sex_counts["male"] >= 50 & length(table(tempdfU$status)) == 3) {
+      myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdfU)[5:ncol(tempdfU)], collapse = "+")))
+      res.inc = crr(myformula, data = tempdfU %>% filter(sex == "male"), id = tempdfU$eid)
+    } else { message("No competing risk in:", t)}
+  tidy_res = broom::tidy(res.inc)
+  as.numeric((cbind(tidy_res$estimate, tidy_res$p.value)))
+  })
+  tumors_grayres_1 = do.call(rbind, tumors_grayres)
+  out = cbind(tumor_freq_data, ptv_type = p, tumors_grayres_1)
+  colnames(out)[5:16] = c("coef_PTVvar", "coef_sexmale", paste0("coef_gpca", 1:10))
+  colnames(out)[17:28] = c("p_PTVvar", "p_sexmale", paste0("p_gpca", 1:10))
+  out
+})
+rm(i)
+
+
+
+```
+
+
+
+
 
