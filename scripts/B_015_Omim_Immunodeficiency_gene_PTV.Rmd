@@ -1,0 +1,98 @@
+---
+title: "B_015_Omim_Immunodeficiency_gene_PTV"
+output: html_document
+date: "2024-12-17"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "Rfast", "fastmatch", "future.apply", "survival", "gridExtra", "pbapply", "forestmodel")
+#"tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , "clusterProfiler", "org.Hs.eg.db", "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", , "Biostrings", , )
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+# pal_npg("nrc")(9)
+# scales::show_col(pal_npg("nrc")(9))
+# pal_npg("nrc", alpha = 0.8)(9)
+# scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+```
+
+#Calculate Immunodeficiency PTV burden
+"immunodeficiency"
+
+
+```{r}
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+
+omim_imdef = fread("Objects/015/OMIM_Immunodeficiency.tsv")
+colnames(omim_imdef) = gsub(" ", "_", colnames(omim_imdef))
+omim_imdef$MIM_Number = as.numeric(gsub("\\*|\\#|%", "", omim_imdef$MIM_Number))
+
+mim_gene_match = fread("Objects/015/MIM_Gene_match.txt")
+colnames(mim_gene_match) = gsub(" ", "_", colnames(mim_gene_match))
+colnames(mim_gene_match) = gsub("\\(|\\)", "", colnames(mim_gene_match))
+omim_imdef %<>% left_join(mim_gene_match, by = "MIM_Number")
+rm(mim_gene_match)
+
+omim_imdef$Ensembl_Gene_ID_Ensembl[omim_imdef$Approved_Gene_Symbol_HGNC == "CCL3L1"] = "ENSG00000277796"
+omim_imdef$Ensembl_Gene_ID_Ensembl[omim_imdef$Approved_Gene_Symbol_HGNC == "KIR3DS1"] = "ENSG00000275434"
+
+ensgs = sort(unique(omim_imdef$Ensembl_Gene_ID_Ensembl))
+ensgs = ensgs[ensgs != ""]
+
+plan(multisession(workers = 4))
+ptvb_MAF104$PTV_OMIM = future_sapply(ptvb_MAF104$Genes, function(x) {
+  genes = strsplit(x, ",")[[1]]
+  sum(genes %fin% ensgs)
+})
+ptvb_MAF104 %<>% select(Patient.ID, PTV_OMIM)
+colnames(ptvb_MAF104)[1] = c("eid")
+rm(ensgs)
+```
+
+#Cox model
+
+```{r}
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/tumor_freq_data")
+sel_gpcas = paste0("gpca", 1:20)
+
+coxres = future_apply(tumor_freq_data, 1, function(ts) {
+  tempdfU = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts[3], ".rds"))
+  ukb = tempdfU %>% left_join(ptvb_MAF104, by = "eid")
+  #ukb$PTVG = ifelse(ukb$PTV == 0, 0, 1)
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("PTV_OMIM", sel_gpcas), collapse = "+")))
+  res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+  as.numeric(rbind(summary(res.cox)$coefficients[,"exp(coef)"], summary(res.cox)$coefficients[,"Pr(>|z|)"]))
+})
+res = cbind(tumor_freq_data, ptv_type = "PTV_ImDef", t(coxres))
+colnames(res)[seq(6,ncol(res),2)] = c("coefPTV", paste0("coef_gpca", 1:length(sel_gpcas)))
+colnames(res)[seq(7,ncol(res),2)] = c("pPTV", paste0("p_gpca", 1:length(sel_gpcas)))
+res$padjPTV = p.adjust(res$pPTV, method = "fdr")
+save(res, file = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/015/res_OMIM_PTV")
+
+#As factor
+coxres_fac = future_apply(tumor_freq_data, 1, function(ts) {
+  tempdfU = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts[3], ".rds"))
+  ukb = tempdfU %>% left_join(ptvb_MAF104, by = "eid")
+  ukb$PTV_OMIMg = ifelse(ukb$PTV_OMIM == 0, 0, 1)
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("PTV_OMIMg", sel_gpcas), collapse = "+")))
+  res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+  as.numeric(rbind(summary(res.cox)$coefficients[,"exp(coef)"], summary(res.cox)$coefficients[,"Pr(>|z|)"]))
+})
+res_fac = cbind(tumor_freq_data, ptv_type = "PTV_ImDef", t(coxres_fac))
+colnames(res_fac)[seq(6,ncol(res_fac),2)] = c("coefPTVg", paste0("coef_gpca", 1:length(sel_gpcas)))
+colnames(res_fac)[seq(7,ncol(res_fac),2)] = c("pPTVg", paste0("p_gpca", 1:length(sel_gpcas)))
+res_fac$padjPTVg = p.adjust(res_fac$pPTVg, method = "fdr")
+
+
+
+
+
+
+rm(coxres, out, i, ptv_data)
+
+```

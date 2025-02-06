@@ -472,7 +472,7 @@ genesFreq = cbind(genesFreq, tumor_gender_freqmat)
 rm(tumor_gender_dfs, tumor_gender_freqmat)
 
 saveRDS(genesFreq, file = "Res/010/genesFreq_all_104.rds")
-
+genesFreq = readRDS("Res/010/genesFreq_all_104.rds")
 ```
 
 #Overrepresented genes in tumors

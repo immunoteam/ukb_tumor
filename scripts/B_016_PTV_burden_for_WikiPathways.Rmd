@@ -1,0 +1,112 @@
+---
+title: "016_PTV_burden_for_WikiPathways"
+output: html_document
+date: "2024-12-18"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "clusterProfiler", "org.Hs.eg.db", "hgnc", "future.apply", "fastmatch")
+#"Rfast", , , "survival", "gridExtra", "pbapply", "forestmodel", "tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", , "Biostrings", , )
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+# pal_npg("nrc")(9)
+# scales::show_col(pal_npg("nrc")(9))
+# pal_npg("nrc", alpha = 0.8)(9)
+# scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+```
+
+#List of genes in WIki Pathways
+Genes of Wiki Pathways
+
+```{r}
+hgnc_data = import_hgnc_dataset(file = "https://storage.googleapis.com/public-download-files/hgnc/tsv/tsv/hgnc_complete_set.txt")
+load("Objects/016/hs_rwpw")
+
+#plan(multisession(workers = 4))
+#require(RCurl)
+#require(XML)
+
+wikipath_genes_hugo = list()
+wikipath_genes_ensembl = list()
+for(i in 1:nrow(hs_rwpw)) {
+  print(i)
+  tempgenes = toupper(trimws(unlist(strsplit(hs_rwpw$datanodes[i], ","), use.names = F)))
+  tempgenes = tempgenes[tempgenes %in% hgnc_data$symbol]
+  geneIDs = bitr(geneID = tempgenes, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+  wikipath_genes_hugo[[i]] = geneIDs$SYMBOL
+  wikipath_genes_ensembl[[i]] = geneIDs$ENSEMBL
+}
+names(wikipath_genes_ensembl) = hs_rwpw$id
+names(wikipath_genes_hugo) = hs_rwpw$id
+
+wikipath_genes_ensembl = wikipath_genes_ensembl[lengths(wikipath_genes_ensembl) > 0]
+wikipath_genes_hugo = wikipath_genes_hugo[lengths(wikipath_genes_hugo) > 0]
+rm(geneIDs, i, tempgenes, hgnc_data)
+```
+
+```{r}
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+
+ukb_ptvENSG = as.list(ptvb_MAF104$ptvgenes)
+ukb_ptvENSG = lapply(ukb_ptvENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
+names(ukb_ptvENSG) = ptvb_MAF104$eid
+rm(ptvb_MAF104)
+
+plan(multisession(workers = 4))
+for(i in 1:length(wikipath_genes_ensembl)) {
+  print(i)
+  tempensgs = wikipath_genes_ensembl[[i]]
+  ptv_data = unname(future_sapply(ukb_ptvENSG, function(u) {
+    sum(u %fin% tempensgs)
+  }))
+  saveRDS(object = ptv_data, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/016/PTV_WIKI/", i, "_", names(wikipath_genes_ensembl)[i], ".rds"))
+}
+rm(i, ptv_data, tempensgs)
+gc()
+
+
+```
+
+```{r}
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/tumor_freq_data")
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptv_dataDF = data.frame(eid = ptvb_MAF104$Patient.ID)
+rm(ptvb_MAF104)
+
+wikiID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/016/PTV_WIKI/")
+wikiID = gsub(".rds", "", wikiID)
+
+plan(multisession(workers = 8))
+
+for(i in 1:length(wikiID)) {
+  print(paste0(i, "_", Sys.time()))
+  ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/016/PTV_WIKI/", wikiID[i], ".rds"))
+  ptv_dataDF$PTV = ptv_data
+  coxres = future_apply(tumor_freq_data, 1, function(ts) {
+    tempdfU = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts[3], ".rds"))
+    ukb = tempdfU %>% left_join(ptv_dataDF, by = "eid")
+    ukb$PTVG = ifelse(ukb$PTV == 0, 0, 1)
+    if(length(unique(ukb$PTVG)) > 1) {ukb$PTVG = as.factor(ukb$PTVG)}
+    res.cox <- coxph(Surv(time, status) ~ PTVG + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10 + gpca11 + gpca12 + gpca13 + gpca14 + gpca15 + gpca16 + gpca17 + gpca18 + gpca19 + gpca20, data = ukb, id = ukb$eid)
+    o = as.numeric(rbind(summary(res.cox)$coefficients[,"exp(coef)"], summary(res.cox)$coefficients[,"Pr(>|z|)"]))
+  })
+  out = cbind(tumor_freq_data, ptv_type = goID[i], t(coxres))
+  colnames(out)[seq(6,ncol(out),2)] = c("coefPTV", paste0("coef_gpca", 1:20))
+  colnames(out)[seq(7,ncol(out),2)] = c("pPTVG", paste0("p_gpca", 1:20))
+  out$padjPTVG = p.adjust(out$pPTVG, method = "fdr")
+  saveRDS(object = out, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/coxres/", goID[i], ".rds"))
+  gc()
+}
+rm(coxres, out, i, ptv_data)
+
+
+
+```
+
