@@ -52,6 +52,8 @@ rm(geneIDs, i, tempgenes, hgnc_data)
 save(wikipath_genes_ensembl, wikipath_genes_hugo, file = "Objects/016/wikipath_genes")
 ```
 
+#Calculate PTV burden
+
 ```{r}
 ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
 ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
@@ -74,6 +76,8 @@ rm(i, ptv_data, tempensgs)
 gc()
 
 ```
+
+#Cox models
 
 ```{r}
 load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/tumor_freq_data")
@@ -110,6 +114,7 @@ for(i in 1:length(wikiID)) {
 rm(coxres, out, i, ptv_data)
 
 ```
+
 
 #Results
 
