@@ -545,49 +545,54 @@ res_fish_1 = future_lapply(cats, function(x) {
   ind1 = fmatch(x, colnames(genesFreq))
   ind2 = fmatch(paste0("n_", x), colnames(genesFreq))
   ftpOR = t(apply(genesFreq, 1, function(y) {
-    ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[9])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), n_nottumorous - as.numeric(y[9]))))
-    c(unname(ft$estimate), ft$p.value)
+    mtx = rbind(c(as.numeric(y[ind1]), as.numeric(y[ind2]) - as.numeric(y[ind1])), c(as.numeric(y[9]), n_nottumorous - as.numeric(y[9])))
+    ft = fisher.test(mtx)
+    c(mtx, unname(ft$estimate), ft$p.value)
   }))
-  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(category = x, .before = "OR") %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("caseY", "controlY", "caseN", "controlN", "OR", "P")) %>% mutate(category = x, .before = "caseY") %>% mutate(Padj = p.adjust(p = P, method = "fdr"))
   bind_cols(genesFreq12, ftpOR)
 })
 res_fish_1 = bind_rows(res_fish_1)
+rm(cats, n_nottumorous)
 
 #####
-cats2 = colnames(genesFreq)[seq(71,ncol(genesFreq),2)]
+cats2 = colnames(genesFreq)[c(17,19,seq(71,ncol(genesFreq),2))]
+n_nottumorous_f = genesFreq$n_notTumorous_f[1]
+n_nottumorous_m = genesFreq$n_notTumorous_m[1]
 res_fish_2 = future_lapply(cats2, function(x) {
   ind1 = fmatch(x, colnames(genesFreq))
   ind2 = fmatch(paste0("n_", x), colnames(genesFreq))
-  if(grepl("_female", x)) {
+  if(grepl("_f", x) | grepl("_female", x)) {
     ftpOR = t(apply(genesFreq, 1, function(y) {
-      ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[11])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), as.numeric(y[10]) - as.numeric(y[11]))))
-      c(unname(ft$estimate), ft$p.value)
+      mtx_f = rbind(c(as.numeric(y[ind1]), as.numeric(y[ind2]) - as.numeric(y[ind1])), c(as.numeric(y[11]), n_nottumorous_f - as.numeric(y[11])))
+      ft = fisher.test(mtx_f)
+      c(mtx_f, unname(ft$estimate), ft$p.value)
     }))
   } else {
     ftpOR = t(apply(genesFreq, 1, function(y) {
-      ft = fisher.test(rbind(c(as.numeric(y[ind1]), as.numeric(y[13])), c(as.numeric(y[ind2]) - as.numeric(y[ind1]), as.numeric(y[12]) - as.numeric(y[13]))))
-      c(unname(ft$estimate), ft$p.value)
+      mtx_m = rbind(c(as.numeric(y[ind1]), as.numeric(y[ind2]) - as.numeric(y[ind1])), c(as.numeric(y[13]), n_nottumorous_m - as.numeric(y[13])))
+      ft = fisher.test(mtx_m)
+      c(mtx_m, unname(ft$estimate), ft$p.value)
     }))
   }
-  ftpOR %<>% as.data.frame() %>% set_colnames(c("OR", "P")) %>% mutate(category = x, .before = "OR") %>% mutate(Padj = p.adjust(p = P, method = "BH"))
+  ftpOR %<>% as.data.frame() %>% set_colnames(c("caseY", "controlY", "caseN", "controlN", "OR", "P")) %>% mutate(category = x, .before = "caseY") %>% mutate(Padj = p.adjust(p = P, method = "fdr"))
   bind_cols(genesFreq12, ftpOR)
 })
 res_fish_2 = bind_rows(res_fish_2)
 
+rm(cats2, n_nottumorous_f, n_nottumorous_m)
+
 res_fishtest = rbind(res_fish_1, res_fish_2)
 
-save(res_fishtest, file = "Res/010/res_fishtest_104")
+saveRDS(res_fishtest, file = "Res/010/res_fishtest_104.rds")
 
-load("Res/010/res_fishtest_104")
+res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
 View(genesFreq[genesFreq$ENSEMBL == "ENSG00000104804",])
 ```
 
 #GO enrichment analysis
 
 ```{r}
-library(clusterProfiler)
-library(org.Hs.eg.db)
-
 res_fishtest$ENTREZID = mapIds(org.Hs.eg.db, keys = res_fishtest$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
 genesFreq12$ENTREZID = mapIds(org.Hs.eg.db, keys = genesFreq12$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
 res_fishtest %>% filter(Padj < 0.2) %>% pull(category) %>% table() %>% sort(decreasing = T)
@@ -625,14 +630,19 @@ head(ego)
 ```
 
 #Melanoma
+Melanoma_female: some irrelevant terms (BP: sphingomyelin metabolic process, response to dsRNA, response to exogenous dsRNA, MF: phosphatidylinositol bisphosphate binding, protein sequestering activity, interleukin-1 receptor binding, molecular sequestering activity, phosphatidylinositol phosphate binding, microtubule plus-end binding, ligase activity)
+Melanoma_male: -
 
 ```{r}
-t = "Melanoma_female"
+genesFreq = readRDS("Res/010/genesFreq_all_103.rds")
+res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+res_fishtest$ENTREZID = mapIds(org.Hs.eg.db, keys = res_fishtest$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
+genesFreq12$ENTREZID = mapIds(org.Hs.eg.db, keys = genesFreq12$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
 
-ego <- enrichGO(gene = res_fishtest %>% dplyr::filter(OR > 1, P < 0.05, category == t) %>% pull(ENTREZID) %>% na.omit(),
-                universe = genesFreq12$ENTREZID,
+ego <- enrichGO(gene = res_fishtest %>% dplyr::filter(OR > 1, P < 0.2, category == "Melanoma_female") %>% pull(ENTREZID) %>% na.omit(),
+                universe = genesFreq$ENTREZID,
                 OrgDb = org.Hs.eg.db,
-                ont = "CC",
+                ont = "ALL",
                 pAdjustMethod = "BH",
                 pvalueCutoff = 0.2,
                 qvalueCutoff = 0.2,
@@ -641,5 +651,96 @@ goplot(ego)
 ego@result %>% View()
 head(ego)
 
+```
+
+##Incidence
+
+#Dataset
+
+```{r}
+res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+broca_crp = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
+
+tempensgs = res_fishtest %>% filter(!SYMBOL %in% broca_crp) %>% filter(category == "Melanoma", OR > 1, P < 0.05) %>% pull(ENSEMBL) #453
+ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% tempensgs))
+
+ukb_data_raw = readRDS("Objects/ukb_data.rds")
+geg = fread("Variables/22006.txt") #caucasians
+ukb_dataF = ukb_data_raw %>% 
+  filter(eid %fin% as.character(geg$eid))
+rm(geg)
+
+ukb_dataF$sex = factor(ukb_dataF$sex, levels = c(0,1), labels = c("female", "male"))
+sel_gpcas = paste0("gpca", 1:20)
+ukb_dataF %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, all_of(sel_gpcas))
+ukb = ukb_dataF %>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
+
+melanomaDF = ukb %>% 
+  filter(cancer_type == "Melanoma") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, PTVb, all_of(sel_gpcas))
+nottumorous = ukb %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1) %>%
+  dplyr::select(eid, sex, cancer_type, time, status, PTVb, all_of(sel_gpcas))
+
+ukb = rbind(melanomaDF, nottumorous)
+
+ukb$PTVG = ifelse(ukb$PTVb == 0, 0, 1)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("sex", "PTVG", sel_gpcas), collapse = "+")))
+res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+summary(res.cox)
+
+forest_model(model = res.cox)
+table(ukb$PTVb, ukb$cancer_type)
+```
+
+##Melanoma female, male
+
+```{r}
+res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+broca_crp = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
+
+#Female
+tempensgs = res_fishtest %>% filter(!SYMBOL %in% broca_crp) %>% filter(category == "Melanoma_female", OR > 1, P < 0.05) %>% pull(ENSEMBL) #407 (406)
+#Male
+tempensgs = res_fishtest%>% filter(!SYMBOL %in% broca_crp) %>% filter(category == "Melanoma_male", OR > 1, P < 0.05) %>% pull(ENSEMBL) #402 (398)
+ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% tempensgs))
+
+tempdfU = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/Melanoma_female.rds")
+tempdfU = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/Melanoma_male.rds")
+
+sel_gpcas = paste0("gpca", 1:20)
+ukb = tempdfU %>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
+ukb$PTVG = ifelse(ukb$PTVb == 0, 0, 1)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("PTVG", sel_gpcas), collapse = "+")))
+res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+forest_model(model = res.cox)
+
+table(ukb$PTVb, ukb$cancer_type)
+```
+
+
+
+```{r}
+
+tempdfU = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/Melanoma.rds")
+ukb = tempdfU %>% left_join(ptv_dataDF, by = "eid")
+ukb$PTVG = ifelse(ukb$PTV == 0, 0, 1)
+if(length(unique(ukb$PTVG)) > 1) {ukb$PTVG = as.factor(ukb$PTVG)}
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("PTVG", sel_gpcas), collapse = "+")))
+res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
 ```
 

@@ -34,6 +34,8 @@ geneSetsENS = lapply(geneSets, function(x) geneIDmatch$ENSEMBL[fmatch(x, geneIDm
 names(geneSetsENS) = gseaGeneSetsID
 
 save(geneSets, geneSetsENS, file = "Objects/017/gsea_c7_genesets")
+load("Objects/017/gsea_c7_genesets")
+table(lengths(geneSets))
 ```
 
 #Calculate PTV burden
@@ -115,21 +117,117 @@ res$genesHugo = sapply(res$gseaInd, function(x) paste0(geneSets[[as.numeric(x)]]
 res$genesENS = sapply(res$gseaInd, function(x) paste0(geneSetsENS[[as.numeric(x)]], collapse = ";"))
 res$gseaInd = as.numeric(res$gseaInd)
 
-genesFreq = readRDS("Res/010/genesFreq_all_104.rds")
+saveRDS(res, file = "Res/017/res_gsea_c7.rds")
+#genesFreq = readRDS("Res/010/genesFreq_all_104.rds")
 
+
+```
+
+#Melanoma
+
+```{r}
+res = readRDS("Res/017/res_gsea_c7.rds")
+res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
 
 # ind = res %>% filter(padjPTVG < 0.05) %>% pull(goInd) %>% unique() %>% as.numeric()
 # sort(unique(unlist(go_desc_list[ind], use.names = F)))
 res %>% filter(padjPTVG < 0.1) %>% pull(ptv_type) %>% table() %>% as.data.frame() %>% View()
 res %>% filter(cancer_type == "Melanoma") %>% filter(pPTVG < 0.05) %>% View()
 
-res %>% filter(grepl("Melanoma", cancer_type)) %>% filter(pPTVG < 0.05) -> tempdf
-tempdf$ptv_type[duplicated(tempdf$ptv_type)] #1899_GSE22589_HIV_VS_HIV_AND_SIV_INFECTED_DC_DN, 1901_GSE22589_SIV_VS_HIV_AND_SIV_INFECTED_DC_DN
+res %>% filter(grepl("Melanoma", cancer_type)) %>% filter(pPTVG < 0.2, coefPTV > 1) -> tempdf
+tempdf$ptv_type[duplicated(tempdf$ptv_type)] #
 
+#res_fishtest %>% filter(SYMBOL %in% )
 
 genesFreq %>% filter(SYMBOL %in% c("SIX4", "STRADB")) %>% dplyr::select(c(1:19,47,94,95,132,133)) %>% View()
+genesFreq %>% filter(SYMBOL %in% geneSets[["GSE22589_HIV_VS_HIV_AND_SIV_INFECTED_DC_DN"]]) %>% View()
+
+```
+
+#Hot tumors vs. nonim tumors
+
+```{r}
+hot_tumors = c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male")
+nonim_tumors = c("Brain_female", "Brain_male", "Ovary_female", "Pancreas_female", "Pancreas_male")
+
+ids = unique(res$ptv_type)
+resF = res %>% filter(pPTVG < 0.1, TS %in% c(hot_tumors, nonim_tumors))
+plan(multisession(workers = 8))
+comp_ht_nimt = t(future_sapply(ids, function(x) {
+  temp_ht = resF %>% filter(ptv_type == x, TS %in% hot_tumors)
+  temp_nimt = resF %>% filter(ptv_type == x, TS %in% nonim_tumors)
+  c(temp_ht %>% filter(coefPTV > 1) %>% nrow(),
+    temp_ht %>% filter(coefPTV > 1, pPTVG < 0.05) %>% nrow(),
+    temp_ht %>% filter(coefPTV < 1) %>% nrow(),
+    temp_ht %>% filter(coefPTV < 1, pPTVG < 0.05) %>% nrow(),
+    temp_nimt %>% filter(coefPTV > 1) %>% nrow(),
+    temp_nimt %>% filter(coefPTV > 1, pPTVG < 0.05) %>% nrow(),
+    temp_nimt %>% filter(coefPTV < 1) %>% nrow(),
+    temp_nimt %>% filter(coefPTV < 1, pPTVG < 0.05) %>% nrow())
+}))
+colnames(comp_ht_nimt) = c("over_ht_01", "over_ht_005", "under_ht_01", "under_ht_005",
+                           "over_nimt_01", "over_nimt_005", "under_nimt_01", "under_nimt_005")
+comp_ht_nimt = cbind.data.frame(id = ids, comp_ht_nimt)
+comp_ht_nimt %>% filter(over_ht_01 >= 3, under_ht_01 == 0, over_nimt_01 == 0) %>% View()
+
+load("Objects/017/gsea_c7_genesets")
+# geneSets[["GSE21063_3H_VS_16H_ANTI_IGM_STIM_BCELL_UP"]] #Genes up-regulated in B lymphocytes stimulated by anti-IgM: 3h versus 16h., These data indicate NFATc1 as a key factor controlling B cell function.
+# geneSets[["GSE3982_MAC_VS_BASOPHIL_DN"]] #Genes down-regulated in comparison of macrophages versus basophils.
+# geneSets[["GSE21360_NAIVE_VS_PRIMARY_MEMORY_CD8_TCELL_DN"]] #Genes down-regulated in CD8 T cells: naïve versus 1' memory.
+# geneSets[["GSE21927_BALBC_VS_C57BL6_MONOCYTE_SPLEEN_UP"]] #Genes up-regulated in spleen CD11b cells: BALBc versus C57BL6 mouse strains.
+# geneSets[["GSE22886_IGM_MEMORY_BCELL_VS_BLOOD_PLASMA_CELL_UP"]] #Genes up-regulated in comparison of memory IgM B cells versus blood plasma cells. - kidney, melanoma, bladder - males
+# geneSets[["GSE12198_CTRL_VS_HIGH_IL2_STIM_NK_CELL_UP"]] #Genes up-regulated in NK cells: primary versus stimulated by high dose of IL2 - FEMALES
+
+ggplot(res[res$ptv_type == "288_GSE12198_CTRL_VS_HIGH_IL2_STIM_NK_CELL_UP",], mapping = aes(x = sex, y = coefPTV)) + geom_boxplot() + stat_compare_means()
+ggplot(res[res$ptv_type == "1968_GSE22886_IGM_MEMORY_BCELL_VS_BLOOD_PLASMA_CELL_UP",], mapping = aes(x = sex, y = coefPTV)) + geom_boxplot() + stat_compare_means()
+
+# geneSets[["GSE12366_NAIVE_VS_MEMORY_BCELL_DN"]] #Genes down-regulated in comparison of naive B cells versus memory B cells.
+# 
+# geneSets[["GSE339_EX_VIVO_VS_IN_CULTURE_CD4POS_DC_DN"]] #Genes down-regulated in comparison of ex vivo CD4 [GeneID=920] dendritic cells (DC) versus cultured CD4 [GeneID=920] DCs. - melanoma, bladder, lung
 
 
+#Reduce(intersect, geneSets[c("GSE21063_3H_VS_16H_ANTI_IGM_STIM_BCELL_UP", "GSE3982_MAC_VS_BASOPHIL_DN", "GSE21360_NAIVE_VS_PRIMARY_MEMORY_CD8_TCELL_DN", "GSE21927_BALBC_VS_C57BL6_MONOCYTE_SPLEEN_UP", "GSE22886_IGM_MEMORY_BCELL_VS_BLOOD_PLASMA_CELL_UP")])
+
+
+comp_ht_nimt %>% filter(over_ht_01 >= 3, under_ht_01 == 0, over_nimt_01 == 0) %>% pull(id) -> tempids
+res %>% 
+  filter(ptv_type %in% tempids, TS %in% c(hot_tumors, nonim_tumors)) %>% 
+  mutate(hot_tumors = TS %in% hot_tumors) %>% 
+  ggplot(mapping = aes(x = hot_tumors, y = coefPTV)) + 
+  geom_boxplot() +
+  facet_wrap(~ptv_type)
+
+#Between gender
+res %>% 
+  filter(ptv_type %in% tempids, TS %in% hot_tumors) %>% 
+  ggplot(mapping = aes(x = sex, y = coefPTV)) + 
+  geom_boxplot() +
+  facet_wrap(~ptv_type)
+
+res %>% 
+  filter(ptv_type %in% grep("BCELL", tempids, value = T), TS %in% hot_tumors) %>% 
+  ggplot(mapping = aes(x = sex, y = coefPTV, color = cancer_type)) + 
+  geom_point() +
+  facet_wrap(~ptv_type)
+
+```
+
+##All tumors
+
+```{r}
+ids = unique(res$ptv_type)
+resF = res %>% filter(pPTVG < 0.1)
+plan(multisession(workers = 8))
+comp_tumors = t(future_sapply(ids, function(x) {
+  c(resF %>% filter(ptv_type == x, coefPTV > 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, coefPTV > 1, pPTVG < 0.05) %>% nrow(),
+    resF %>% filter(ptv_type == x, coefPTV < 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, coefPTV < 1, pPTVG < 0.05) %>% nrow())
+}))
+colnames(comp_tumors) = c("over_01", "over_005", "under_01", "under_005")
+comp_tumors = cbind.data.frame(id = ids, comp_tumors)
+
+comp_tumors %>% filter(over_01 >= 10) %>% View()
 
 ```
 

@@ -1,0 +1,139 @@
+---
+title: "B_000_Create_subdatasets"
+output: html_document
+date: "2025-02-25"
+---
+
+#Tumorous datasets
+
+```{r}
+ukb_data_raw = readRDS("Objects/ukb_data.rds")
+geg = fread("Variables/22006.txt") #caucasians
+ukb_dataF = ukb_data_raw %>% filter(eid %fin% as.character(geg$eid)) #425,654
+rm(geg)
+
+ukb_dataF %<>% filter(s.color != "Black") #425,530
+
+ukb_dataF$sex = factor(ukb_dataF$sex, levels = c(0,1), labels = c("female", "male"))
+sel_gpcas = paste0("gpca", 1:40)
+
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Brain/CNS"] = "Brain"
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Hodgkin lymphoma"] = "HodgkinLymphoma"
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Multiple myeloma"] = "MultipleMyeloma"
+ukb_dataF$cancer_type[ukb_dataF$cancer_type == "Non-Hodgkin lymphoma"] = "NonHodgkinLymphoma"
+
+ukb_dataF %<>% dplyr::select(eid, birthdate, sex, date_of_death, death, diag_date, cancer_type, all_of(sel_gpcas)) #425,530
+ukb_dataF %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.))) #425,530
+
+```
+
+#Non-tumorous dataset
+
+```{r}
+nottumorous_all = ukb_dataF %>% 
+  dplyr::filter(cancer_type == "No_cancer") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1)
+
+nottumorous_female = ukb_dataF %>% 
+  dplyr::filter(cancer_type == "No_cancer", sex == "female") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1)
+
+nottumorous_male = ukb_dataF %>% 
+  dplyr::filter(cancer_type == "No_cancer", sex == "male") %>%
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate)
+  )) %>% 
+  mutate(status = 1)
+
+saveRDS(nottumorous_all, file = "Objects/000_Sub_datasets/nottumorous_all.rds")
+saveRDS(nottumorous_female, file = "Objects/000_Sub_datasets/nottumorous_female.rds")
+saveRDS(nottumorous_male, file = "Objects/000_Sub_datasets/nottumorous_male.rds")
+```
+
+#Tumorous
+
+```{r}
+tumors = sort(unique(ukb_dataF$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+
+tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_dataF %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    nrow()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n") #42
+save(tumor_freq_data, file = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+
+tumorous_all = ukb_dataF %>% 
+  dplyr::filter(cancer_type %in% tumors) %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2)
+
+tumorous_female = ukb_dataF %>% 
+  dplyr::filter(cancer_type %in% tumors, sex == "female") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2)
+
+tumorous_male = ukb_dataF %>% 
+  dplyr::filter(cancer_type %in% tumors, sex == "male") %>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 2)
+
+saveRDS(tumorous_all, file = "Objects/000_Sub_datasets/tumorous_all.rds")
+saveRDS(tumorous_female, file = "Objects/000_Sub_datasets/tumorous_female.rds")
+saveRDS(tumorous_male, file = "Objects/000_Sub_datasets/tumorous_male.rds")
+```
+
+##Tumors separately
+
+```{r}
+lapply(tumors, function(t) {
+  tumorous = ukb_dataF %>% 
+    dplyr::filter(cancer_type == t) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 2)
+  saveRDS(tumorous, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", t, ".rds"))
+})
+
+```
+
+#Gender-tumor pairs
+##Dataset creation
+
+```{r}
+apply(tumor_freq_data, 1, function(ts) {
+  tumorous = ukb_dataF %>%
+    filter(cancer_type == ts[1], sex == ts[2]) %>%
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 2)
+  saveRDS(tumorous, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ts[3], ".rds"))
+})
+
+```
