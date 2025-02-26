@@ -204,3 +204,7 @@ fun_TumorIncPlot = function(tumor = "all", control = "nottumorous", gender = "al
   grid.arrange(inc_plot, inc_table_grob, layout_matrix = rbind(c(1, 1), c(1,1), c(2, 2), c(2, 2)))
 }
 
+#Overall survival plot function
+
+#Disease specific survival plot function
+
