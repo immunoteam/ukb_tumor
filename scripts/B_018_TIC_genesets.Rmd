@@ -1,0 +1,30 @@
+---
+title: "B_018_TIC_genesets"
+output: html_document
+date: "2025-02-26"
+---
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+```
+
+```{r}
+load("Objects/TIC_dfs/Melanoma_Promote_immunity")
+load("Objects/TIC_dfs/Melanoma_Inhibit_immunity")
+load("Objects/TIC_dfs/Melanoma_Promote_tumorigenesis")
+load("Objects/TIC_dfs/Melanoma_")
+genes = unique(grep("ENSG", unlist(strsplit(Melanoma_Promote_immunity$genes,",")), value = T))
+genes = unique(grep("ENSG", unlist(strsplit(Melanoma_Inhibit_immunity$genes,",")), value = T))
+genes = unique(grep("ENSG", unlist(strsplit(Melanoma_Promote_tumorigenesis$genes,",")), value = T))
+genes = unique(grep("ENSG", unlist(strsplit(Melanoma_$genes,",")), value = T))
+genes = unique(c(grep("ENSG", unlist(strsplit(Melanoma_Promote_immunity$genes,",")), value = T),
+                 grep("ENSG", unlist(strsplit(Melanoma_Inhibit_immunity$genes,",")), value = T),
+                 grep("ENSG", unlist(strsplit(Melanoma_Promote_tumorigenesis$genes,",")), value = T),
+                 grep("ENSG", unlist(strsplit(Melanoma_$genes,",")), value = T)))
+fun_TumorIncForestPlot(tumor = "Melanoma", gender = "all", geneset = genes)
+fun_TumorIncForestPlot(tumor = "Melanoma", gender = "female", geneset = genes)
+fun_TumorIncForestPlot(tumor = "Melanoma", gender = "male", geneset = genes)
+fun_TumorIncPlot(tumor = "Melanoma", gender = "all", geneset = genes)
+```
+
