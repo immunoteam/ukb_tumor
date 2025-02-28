@@ -172,15 +172,12 @@ source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
 res = readRDS("Res/017/res_gsea_c7.rds")
 
 hot_tumors = c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male")
-hot_tumors_female = grep("_female", hot_tumors, value = T)
-hot_tumors_male = grep("_male", hot_tumors, value = T)
-
 nonim_tumors = c("Brain_female", "Brain_male", "Ovary_female", "Pancreas_female", "Pancreas_male")
 
-ids = unique(res$ptv_type)
-resF = res %>% filter(pPTVG < 0.1, TS %in% c(hot_tumors, nonim_tumors))
+gseTermsAll = unique(res$ptv_type)
+resF = res %>% filter(pPTVG < 0.2, TS %in% c(hot_tumors, nonim_tumors))
 plan(multisession(workers = 8))
-comp_ht_nimt = t(future_sapply(ids, function(x) {
+comp_ht_nimt = t(future_sapply(gseTermsAll, function(x) {
   temp_ht = resF %>% filter(ptv_type == x, TS %in% hot_tumors)
   temp_nimt = resF %>% filter(ptv_type == x, TS %in% nonim_tumors)
   c(temp_ht %>% filter(coefPTV > 1) %>% nrow(),
@@ -194,17 +191,44 @@ comp_ht_nimt = t(future_sapply(ids, function(x) {
 }))
 colnames(comp_ht_nimt) = c("over_ht_01", "over_ht_005", "under_ht_01", "under_ht_005",
                            "over_nimt_01", "over_nimt_005", "under_nimt_01", "under_nimt_005")
-comp_ht_nimt = cbind.data.frame(id = ids, comp_ht_nimt)
+comp_ht_nimt = cbind.data.frame(id = gseTermsAll, comp_ht_nimt)
 comp_ht_nimt %>% filter(over_ht_01 >= 3, under_ht_01 == 0, over_nimt_01 == 0) %>% View()
 
 comp_ht_nimt %>% filter(over_ht_01 >= 3, under_ht_01 == 0, over_nimt_01 == 0) %>% pull(id) -> gse_terms
 
 
-plots = lapply(gse_terms, function(g) {
-  genes = res %>% filter(ptv_type == g) %>% dplyr::slice(1) %>% pull(genesENS) %>% strsplit(";") %>% unlist()
-  
-  grid.arrange(fun_TumorIncForestPlot(tumor = "Melanoma", gender = "female", geneset = genes), fun_TumorIncForestPlot(tumor = "Melanoma", gender = "male", geneset = genes), ncol=2, top = g)
+plots_FP = future_lapply(gse_terms, function(g) {
+  genes = resF %>% filter(ptv_type == g) %>% dplyr::slice(1) %>% pull(genesENS) %>% strsplit(";") %>% unlist()
+  grid.arrange(fun_TumorIncForestPlot(tumor = unique(gsub("_female|_male", "", hot_tumors)), gender = "all", geneset = genes),
+               fun_TumorIncForestPlot(tumor = gsub("_female", "", grep("_female", hot_tumors, value = T)), gender = "female", geneset = genes),
+               fun_TumorIncForestPlot(tumor = gsub("_male", "", grep("_male", hot_tumors, value = T)), gender = "male", geneset = genes),
+               fun_TumorIncForestPlot(tumor = unique(gsub("_female|_male", "", nonim_tumors)), gender = "all", geneset = genes),
+               fun_TumorIncForestPlot(tumor = gsub("_female", "", grep("_female", nonim_tumors, value = T)), gender = "female", geneset = genes),
+               fun_TumorIncForestPlot(tumor = gsub("_male", "", grep("_male", nonim_tumors, value = T)), gender = "female", geneset = genes),
+               ncol=3, nrow = 2, top = g)
 })
+
+plots_INC = future_lapply(gse_terms[1:2], function(g) {
+  genes = resF %>% filter(ptv_type == g) %>% dplyr::slice(1) %>% pull(genesENS) %>% strsplit(";") %>% unlist()
+  ggdraw() + 
+    draw_plot(fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", hot_tumors)), gender = "all", geneset = genes), x = 0.05, y = .5, width = .3, height = .5) +
+    draw_plot(fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", hot_tumors, value = T)), gender = "female", geneset = genes), x = 0.35, y = .5, width = .3, height = .5) +
+    draw_plot(fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", hot_tumors, value = T)), gender = "male", geneset = genes), x = 0.65, y = .5, width = .3, height = .5) +
+    draw_plot(fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", nonim_tumors)), gender = "all", geneset = genes), x = 0.05, y = 0, width = .3, height = .5) +
+    draw_plot(fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", nonim_tumors, value = T)), gender = "female", geneset = genes), x = 0.35, y = 0, width = .3, height = .5) +
+    draw_plot(fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", nonim_tumors, value = T)), gender = "female", geneset = genes), x = 0.65, y = 0, width = .3, height = .5)
+  # grid.arrange(fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", hot_tumors)), gender = "all", geneset = genes),
+  #              fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", hot_tumors, value = T)), gender = "female", geneset = genes),
+  #              fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", hot_tumors, value = T)), gender = "male", geneset = genes),
+  #              fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", nonim_tumors)), gender = "all", geneset = genes),
+  #              fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", nonim_tumors, value = T)), gender = "female", geneset = genes),
+  #              fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", nonim_tumors, value = T)), gender = "female", geneset = genes),
+  #              ncol=3, nrow = 2, top = g)
+})
+
+ggsave(filename = "Plots/017/Hot_vs_Nonim_Tumors_03.pdf", plot = marrangeGrob(plots_INC, nrow = 1, ncol = 1), width = 40, height = 14)
+
+
 
 
 load("Objects/017/gsea_c7_genesets")
