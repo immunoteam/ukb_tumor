@@ -44,7 +44,7 @@ fun_TumorIncForestPlot = function(tumor = "all", control = "nottumorous", gender
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tempdf %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
   if(ptv_burden_cat == T) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
-  case_n_ptvb_1 = tempdf %>% filter(status == 2, PTVb == 1) %>% nrow()
+  case_n_ptvb_1 = tempdf %>% filter(status == 1, PTVb == 1) %>% nrow()
   #Select predictors
   sel_gpcas = paste0("gpca", 1:gpca_nb)
   if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender == "all") {
