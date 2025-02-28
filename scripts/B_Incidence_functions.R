@@ -72,15 +72,15 @@ fun_TumorIncForestPlot = function(tumor = "all", control = "nottumorous", gender
 
 
 #Generate Forest plot
-fun_TumorIncForestPlot = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads) {
+fun_TumorIncForestPlot = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   #if(c("PTVgenes") %in% colnames(dataset))
   #plan(future::cluster, workers = threads)
   if(control == "nottumorous" & gender == "all") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_all.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
   } else if(control == "nottumorous" & gender == "female") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_female.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_female.rds"))
   } else if(control == "nottumorous" & gender == "male") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_male.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_male.rds"))
   }
   m = max(control_data$date_of_death, na.rm = T)
   control_data %<>% 
@@ -91,13 +91,13 @@ fun_TumorIncForestPlot = function(tumor = "all", control = "nottumorous", gender
     mutate(status = 0)
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
-      tmr_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_all.rds")
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
     } else if(tmr == "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
     } else if(tmr != "all" & gender == "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
     } else if(tmr != "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, "_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
     }
   }))
   tumor_data %<>% 
@@ -136,13 +136,13 @@ fun_TumorIncForestPlot = function(tumor = "all", control = "nottumorous", gender
 }
 
 #Perform a Cox model and return the P-values and the coefficients
-fun_TumorIncCoxModel = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads) {
+fun_TumorIncCoxModel = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   if(control == "nottumorous" & gender == "all") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_all.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
   } else if(control == "nottumorous" & gender == "female") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_female.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_female.rds"))
   } else if(control == "nottumorous" & gender == "male") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_male.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_male.rds"))
   }
   m = max(control_data$date_of_death, na.rm = T)
   control_data %<>% 
@@ -153,13 +153,13 @@ fun_TumorIncCoxModel = function(tumor = "all", control = "nottumorous", gender =
     mutate(status = 0)
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
-      tmr_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_all.rds")
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
     } else if(tmr == "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
     } else if(tmr != "all" & gender == "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
     } else if(tmr != "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, "_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
     }
   }))
   tumor_data %<>% 
@@ -167,15 +167,14 @@ fun_TumorIncCoxModel = function(tumor = "all", control = "nottumorous", gender =
     distinct(eid, .keep_all = T) %>% 
     mutate(time = as.numeric((diag_date - birthdate))) %>% 
     mutate(status = 1)
-  
   tempdf = rbind(tumor_data, control_data)
   rm(tumor_data, control_data)
-  ptvb_MAF104 = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
   ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tempdf$eid)
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tempdf %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
   if(ptv_burden_cat == T) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
-  case_n_ptvb_1 = tempdf %>% filter(status == 2, PTVb == 1) %>% nrow()
+  case_n_ptvb_1 = tempdf %>% filter(status == 1, PTVb == 1) %>% nrow()
   #Select predictors
   sel_gpcas = paste0("gpca", 1:gpca_nb)
   if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender == "all") {
@@ -189,21 +188,19 @@ fun_TumorIncCoxModel = function(tumor = "all", control = "nottumorous", gender =
   }
   myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
   res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
-  coefs = summary(res.cox)$coefficients[,"exp(coef)"]
-  names(coefs) = paste0("hr_", names(coefs))
-  pvalues = summary(res.cox)$coefficients[,"Pr(>|z|)"]
-  names(pvalues) = paste0("p_", names(pvalues))
-  c(coefs, pvalues)
+  out = summary(res.cox)$coefficients["PTVb1",c("exp(coef)","Pr(>|z|)")]
+  names(out) = c("HR", "Pvalue")
+  out
 }
 
 #Perform a Fisher's exact test and return the P-value and the odds ratio
-fun_TumorIncFishTest = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads) {
+fun_TumorIncFishTest = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   if(control == "nottumorous" & gender == "all") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_all.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
   } else if(control == "nottumorous" & gender == "female") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_female.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_female.rds"))
   } else if(control == "nottumorous" & gender == "male") {
-    control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_male.rds")
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_male.rds"))
   }
   m = max(control_data$date_of_death, na.rm = T)
   control_data %<>% 
@@ -214,13 +211,13 @@ fun_TumorIncFishTest = function(tumor = "all", control = "nottumorous", gender =
     mutate(status = 0)
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
-      tmr_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_all.rds")
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
     } else if(tmr == "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
     } else if(tmr != "all" & gender == "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
     } else if(tmr != "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, "_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
     }
   }))
   tumor_data %<>% 
@@ -231,7 +228,7 @@ fun_TumorIncFishTest = function(tumor = "all", control = "nottumorous", gender =
   
   tempdf = rbind(tumor_data, control_data)
   rm(tumor_data, control_data)
-  ptvb_MAF104 = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
   ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tempdf$eid)
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tempdf %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
@@ -243,29 +240,30 @@ fun_TumorIncFishTest = function(tumor = "all", control = "nottumorous", gender =
 
 
 
-fun_TumorIncPlot = function(tumor = "Melanoma", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads) {
+fun_TumorIncPlot = function(tumor = "Melanoma", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(gender == "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
     } else {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, "_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
     }
   }))
   tumor_data$death_type[tumor_data$death == T & is.na(tumor_data$death_type)] = "other"
   tumor_data %<>% mutate(cancerCausesDeath = death_type == cancer_type)
+  m = max(tumor_data$date_of_death, na.rm = T)
   tumor_data %<>% 
     arrange(diag_date) %>% 
     distinct(eid, .keep_all = T) %>% 
     mutate(time = case_when(
       death == T ~ as.numeric(date_of_death - birthdate),
-      death == F ~ as.numeric(max(date_of_death, na.rm = T) - birthdate))) %>% 
+      death == F ~ as.numeric(m - birthdate))) %>% 
     mutate(status = case_when(
       death == T & cancerCausesDeath == T ~ 1,
       death == F ~ 2,
       death == T & cancerCausesDeath == F ~ 3
     )) %>% 
     transform(status = factor(status, levels = c(1,2,3)))
-  ptvb_MAF104 = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
   ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tumor_data$eid)
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tumor_data %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
@@ -345,19 +343,19 @@ fun_TumorIncFishTest(tumor = "Melanoma", geneset = genes)
 fun_TumorIncForestPlot(tumor = "Melanoma", gender = "female", geneset = genes)
 fun_TumorIncForestPlot(tumor = "Melanoma", gender = "male", geneset = genes)
 
-fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads) {
+fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
-      tmr_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_all.rds")
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
     } else if(tmr == "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
     } else if(tmr != "all" & gender == "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
     } else if(tmr != "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, "_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
     }
   }))
-  ptvb_MAF104 = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
   ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tumor_data$eid)
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tumor_data %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
@@ -394,19 +392,19 @@ fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG0
 }
 
 #Disease specific
-fun_TumorSurvPlotDS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads) {
+fun_TumorSurvPlotDS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
-      tmr_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_all.rds")
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
     } else if(tmr == "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/tumorous_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
     } else if(tmr != "all" & gender == "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
     } else if(tmr != "all" & gender != "all") {
-      tmr_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", tmr, "_", gender, ".rds"))
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
     }
   }))
-  ptvb_MAF104 = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
   ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tumor_data$eid)
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tumor_data %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
