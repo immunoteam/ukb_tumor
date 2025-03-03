@@ -173,7 +173,7 @@ fun_TumorIncFishTest = function(tumor = "all", control = "nottumorous", gender =
 
 
 
-fun_TumorIncPlot = function(tumor = "Melanoma", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
+fun_TumorIncStat = function(tumor = "Melanoma", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(gender == "all") {
       tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
@@ -219,16 +219,16 @@ fun_TumorIncPlot = function(tumor = "Melanoma", gender = "all", geneset = c("ENS
   #     x = "Days"
   #   )
   
-  cuminc(Surv(time, status) ~ PTVb, data = tumor_data) #%>%
-    #tbl_cuminc(times = seq(5000,30000,5000), label_header = "**{time/365.25}-year cuminc**") %>%
-    #add_p()
-
   # cuminc(Surv(time, status) ~ PTVb, data = tumor_data) %>%
-  #   ggcuminc() +
-  #   labs(x = "Days") +
-  #   add_confidence_interval() +
-  #   add_risktable() +
-  #   add_pvalue()
+  #   tbl_cuminc(times = seq(5000,30000,5000), label_header = "**{time/365.25}-year cuminc**") %>%
+  #   add_p()
+
+  cuminc(Surv(time, status) ~ PTVb, data = tumor_data) %>%
+    ggcuminc() +
+    labs(x = "Days") +
+    add_confidence_interval() +
+    add_risktable() +
+    add_pvalue()
   
   #Competing risk regression
   #I. Subdistribution hazards; HR>1 - significantly associated with increased hazard of death due to melanoma
@@ -267,6 +267,10 @@ fun_TumorIncPlot = function(tumor = "Melanoma", gender = "all", geneset = c("ENS
   #   draw_plot(inc_table_grob, x = 0.15, y = 0, width = 0.7, height = .5)
   # out_fig
 }
+
+
+
+
 
 fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
