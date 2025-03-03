@@ -1,0 +1,304 @@
+---
+title: "L_105_TICcom"
+author: "Bagi Laura"
+date: "2025-02-17"
+output: html_document
+---
+
+#Libraries
+```{r}
+library(ggpubr)
+library(fastmatch)
+library(readxl)
+library(forcats)
+library(survival)
+library(survminer)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(caret)
+library(tidyverse)
+library(future.apply)
+library(magrittr)
+library(tidycmprsk)
+library(ggsurvfit)
+library(patchwork)
+library(cowplot)
+library(gt)
+library(gtsummary)
+library(devtools)
+library(pbapply)
+library(broom)
+library(pheatmap)
+library(RColorBrewer)
+library(circlize)
+library(dendsort)
+library(forestmodel)
+library(purrr)
+options(dplyr.summarise.inform = F)
+
+```
+
+#Loads
+```{r}
+TICCom = read.csv("C:/Users/bagil/Desktop/ukb/Genesets/Experimentally_verified_TIC_communication2.csv", header = T, sep = ";", stringsAsFactors = F)
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_ptv")
+ukb_data$caucasian = factor(ukb_data$caucasian, levels = c(0,1), labels = c("not_caucasian", "caucasian"))
+ukb_data = ukb_data %>% 
+  filter(caucasian == "caucasian")
+
+PTVburden = read_tsv("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+
+```
+
+#Table creator
+##TICcom
+```{r}
+#TICcom
+tic_comm = TICCom %>% 
+  mutate(genes = paste(Gene1Name, Gene2Name, Gene1Id, Gene2Id, sep = ",")) %>% 
+  mutate(cell_type = paste(Cell_type1, Cell_type2, sep = ",")) %>% 
+  mutate(gene_pairs = paste(Gene1Name, Gene2Name, sep = ",")) %>% 
+  mutate(ENSMB = paste(Gene1Id, Gene2Id, sep = ",")) %>% 
+  select(Cancer_Type, Relation_To_Immunity_Or_Cancer, cell_type, genes, gene_pairs, ENSMB)
+ticc_codes = data.frame(
+    ENSMB = c(TICCom$Gene1Id, TICCom$Gene2Id),
+    Symbol = c(TICCom$Gene1Name, TICCom$Gene2Name)
+  )
+ticc_codes = unique(ticc_codes)
+
+tumor_relation_list = split(tic_comm, list(tic_comm$Cancer_Type, tic_comm$Relation_To_Immunity_Or_Cancer), drop = TRUE)
+out_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/"
+
+lapply(names(tumor_relation_list), function(x) {
+  obj_name = gsub("[ .]", "_", x)
+  filtering_df = tumor_relation_list[[x]]
+  if (nrow(filtering_df) >= 10){
+    assign(obj_name, filtering_df, envir = .GlobalEnv)
+    out_path = file.path(out_dir, paste0(obj_name))
+    save(list = obj_name, file = out_path)
+  }
+})
+
+
+
+```
+
+##Frequents
+```{r}
+
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/Melanoma_Inhibit_immunity")
+#freq
+gpca = paste0("gpca", 1:10)
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+tumor_freq_data = as.data.frame(table(ukb_data$cancer_type, ukb_data$sex)) %>%
+  set_colnames(c("cancer_type", "sex", "n")) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  filter(cancer_type %in% tumors) %>% 
+  pivot_wider(id_cols = cancer_type, names_from = sex, values_from = n)
+
+tumorous_all = ukb_data %>% 
+      filter(cancer_type %in% tumors) %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, age_at_cancer, diag_date, cancer_type, death_type, caucasian, Genes_PTV_MAF, all_of(gpca))
+tumorous_all = tumorous_all %>% 
+  mutate(Age_at_diag = round(as.numeric((diag_date - birthdate)/365.25)),
+         Age_Group = case_when(
+    Age_at_diag <= 45 ~ 1,
+    Age_at_diag >= 46 & Age_at_diag <= 50 ~ 2,
+    Age_at_diag >= 51 & Age_at_diag <= 55 ~ 3,
+    Age_at_diag >= 56 & Age_at_diag <= 60 ~ 4,
+    Age_at_diag >= 61 ~ 5
+  ))
+nottumorous_all = ukb_data %>% 
+      filter(cancer_type == "No_cancer") %>% 
+    dplyr::select(eid, birthdate, sex, death, date_of_death, age, age_at_cancer, diag_date, cancer_type, death_type, caucasian, Genes_PTV_MAF, all_of(gpca))
+nottumorous_all = nottumorous_all %>% 
+  mutate(Age_at_diag = ifelse(death == T, round(as.numeric((date_of_death - birthdate)/365.25)), round(as.numeric((max(date_of_death, na.rm = T) - birthdate)/365.25))),
+         Age_Group = case_when(
+           Age_at_diag <= 45 ~ 1,
+           Age_at_diag >= 46 & Age_at_diag <= 50 ~ 2,
+           Age_at_diag >= 51 & Age_at_diag <= 55 ~ 3,
+           Age_at_diag >= 56 & Age_at_diag <= 60 ~ 4,
+           Age_at_diag >= 61 ~ 5))
+
+
+
+#freqs for cancer
+#Gene list
+genes = unlist(strsplit(tic_comm$genes, ","))
+TIC_genes = unique(grep("^ENSG", genes, value = T))
+save(TIC_genes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/TIC_genes")
+
+#For tumors
+#Function
+ptv_gene_counts = function(ds, g, t, s){
+  ds %>% 
+    filter(str_detect(Genes_PTV_MAF, g) & cancer_type == t & sex == s) %>% 
+    group_by(Age_Group) %>% 
+    summarize(
+      count = n(),
+      .groups = "drop"
+    ) 
+}
+#Df maker
+plan(multisession(workers = 3))
+gene_counts_list = pblapply(genes, function(gene) {
+  tempdf_female = bind_rows(pblapply(tumors, FUN = function(tumor){
+    res = ptv_gene_counts(ds = tumorous_all, g = gene, t = tumor, s = "female") 
+    res$Gene = gene
+    res$Tumor = tumor
+    res
+  }))
+  tempdf_female$sex = "Female"
+  tempdf_male = bind_rows(pblapply(tumors, FUN = function(tumor){
+    res = ptv_gene_counts(ds = tumorous_all, g = gene, t = tumor, s = "male") 
+    res$Gene = gene
+    res$Tumor = tumor
+    res
+  }))
+  tempdf_male$sex = "Male"
+  rbind(tempdf_female, tempdf_male)
+})
+tumor_genes = bind_rows(gene_counts_list)
+save(tumor_genes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_genes")
+
+load(file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_genes")
+
+ticc_genes_female = tumor_genes %>% 
+  filter(count >= 5, sex == "Female") #65
+
+ticc_genes_male = tumor_genes %>% 
+  filter(count >= 5 ,sex == "Male") #88
+
+save(ticc_genes_female, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_female")
+save(ticc_genes_male, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_male")
+
+#For healthy pop
+ptv_gene_counts_notumor = function(ds, g, s){
+  ds %>% 
+    filter(str_detect(Genes_PTV_MAF, g) & sex == s) %>% 
+    group_by(Age_Group) %>% 
+    summarize(
+      count = n(),
+      .groups = "drop"
+    ) 
+}
+
+#Df maker
+plan(multisession(workers = 3))
+gene_counts_list_notumor = pblapply(genes, function(gene) {
+  tempdf_female = ptv_gene_counts_notumor(ds = nottumorous_all, g = gene, s = "female") 
+  tempdf_female$Gene = gene
+  tempdf_female$Tumor = "No_cancer"
+  tempdf_female$sex = "Female"
+  tempdf_male = ptv_gene_counts_notumor(ds = nottumorous_all, g = gene, s = "male") 
+  tempdf_male$Gene = gene
+  tempdf_male$Tumor = "No_cancer"
+  tempdf_male$sex = "Male"
+  rbind(tempdf_female, tempdf_male)
+})
+notumor_genes = bind_rows(gene_counts_list_notumor)
+notumor_genes = notumor_genes %>% 
+  filter(count >= )
+save(notumor_genes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/notumor_genes")
+
+```
+
+#Analysis
+```{r}
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_female")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_male")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/notumor_genes")
+
+colnames(ticc_genes_female)[3] = "ENSMB"
+colnames(ticc_genes_male)[3] = "ENSMB"
+colnames(notumor_genes)[3] = "ENSMB"
+
+ticc_genes_female = right_join(ticc_codes, ticc_genes_female, by = "ENSMB")
+ticc_genes_male = right_join(ticc_codes, ticc_genes_male, by = "ENSMB")
+notumor_genes = right_join(ticc_codes, notumor_genes, by = "ENSMB")
+save(ticc_genes_female, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_female")
+save(ticc_genes_male, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_male")
+save(notumor_genes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/notumor_genes")
+
+F_ticgenes = ticc_genes_female %>% 
+  inner_join(tic_comm %>% separate_rows(gene_pairs, sep = ","), by = c("Symbol" = "gene_pairs"))
+M_ticgenes = ticc_genes_male %>% 
+  inner_join(tic_comm %>% separate_rows(gene_pairs, sep = ","), by = c("Symbol" = "gene_pairs"))
+
+colnames(F_ticgenes)[1:11] = c("ENSMBs", "Gene", "Age_group", "PTVcount", "UKB_tumor", "sex", "TIC_cancertype", "Relation", "Cell_type", "Gene_paires", "ENSMBp")
+colnames(M_ticgenes)[1:11] = c("ENSMBs", "Gene", "Age_group", "PTVcount", "UKB_tumor", "sex", "TIC_cancertype", "Relation", "Cell_type", "Gene_paires", "ENSMBp")
+
+save(F_ticgenes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/F_ticgenes")
+save(M_ticgenes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/M_ticgenes")
+
+```
+
+
+```{r}
+
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_female")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/ticc_genes_male")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/notumor_genes")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/F_ticgenes")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/M_ticgenes")
+
+i = 0
+out_dir = "plots/TIC/"
+pdf_width = 15  
+pdf_height = 6
+
+#Female
+pblapply(unique(ticc_genes_female$Tumor), function(t) {
+  i=i+1
+  .GlobalEnv$i = i
+  pdf_filename = paste0(out_dir, "boxplot_F_", t, ".pdf")
+  pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+  fig = ggplot(ticc_genes_female %>% filter(Tumor == t), aes(x = Symbol, y = count)) +
+    geom_boxplot(aes(fill = Symbol)) +  
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = paste("Gene Counts for", t), x = "Gene", y = "Count", fill = "Genes")
+  print(fig)
+  dev.off()
+})
+
+#Male
+pblapply(unique(ticc_genes_male$Tumor), function(t) {
+  i=i+1
+  .GlobalEnv$i = i
+  pdf_filename = paste0(out_dir, "boxplot_M_", t, ".pdf")
+  pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+  fig = ggplot(ticc_genes_male %>% filter(Tumor == t), aes(x = Symbol, y = count)) +
+    geom_boxplot(aes(fill = Symbol)) +  
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = paste("Gene Counts for", t), x = "Gene", y = "Count", fill = "Genes")
+  print(fig)
+  dev.off()
+})
+
+i = 0
+out_dir = "plots/TIC/"
+pdf_width = 15  
+pdf_height = 8
+#No tumors
+pblapply(unique(notumor_genes$sex), function(s) {
+  i=i+1
+  .GlobalEnv$i = i
+  pdf_filename = paste0(out_dir, "boxplot_notumor_", s, ".pdf")
+  pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+  fig = ggplot(notumor_genes %>% filter(sex == s), aes(x = Symbol, y = count)) +
+    geom_boxplot() +  
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    labs(title = paste("Gene Counts for", s), x = "Gene", y = "Count")
+  print(fig)
+  dev.off()
+})
+
+
+```
+
