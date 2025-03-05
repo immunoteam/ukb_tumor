@@ -270,7 +270,9 @@ fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = unlist(strsplit(
 fun_TumorIncFishTest(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
 fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
 fun_TumorIncStat(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
+fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
 fun_TumorSurvCoxDS(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
+
 
 ```
 
