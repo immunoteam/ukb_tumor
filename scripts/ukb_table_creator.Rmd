@@ -31,8 +31,8 @@ options(dplyr.summarise.inform = F)
 #ukb datas part 1
 ```{r}
 #birthdate
-year_of_birth = read.table("C:/Users/bagil/Desktop/ukb/34.txt", header = T) #34
-month_of_birth= read.table("C:/Users/bagil/Desktop/ukb/52.txt", header = T) #52
+year_of_birth = read.table("C:/Users/bagil/Desktop/ukb/rawdata/34.txt", header = T) #34
+month_of_birth= read.table("C:/Users/bagil/Desktop/ukb/rawdata/52.txt", header = T) #52
 ukb_data=data.frame(eid= year_of_birth$eid)
 df_births = data.frame(eid=year_of_birth$eid, year=year_of_birth$value, 
                        month= month_of_birth$value[match(month_of_birth$eid, year_of_birth$eid)], 
@@ -176,7 +176,7 @@ meta = fread("C:/Users/bagil/Desktop/MyGit/ukb_tumor/rawdata/40009.txt")
 
 
 plan(multisession)
-cancer_data = future_lapply(X = unique(histology_of_cancer$eid),FUN=function(x){
+cancer_data = pblapply(X = unique(histology_of_cancer$eid),FUN=function(x){
    temp_df=histology_of_cancer[histology_of_cancer$eid==x,]
    temp_df$cnid= substr(x = temp_df$UKB_column_name, start = 7, stop = 10)
    tempdf_2=type_of_cancer[type_of_cancer$eid==x,]
@@ -188,7 +188,7 @@ cancer_data = future_lapply(X = unique(histology_of_cancer$eid),FUN=function(x){
    cancer_codes_df=cancer_codes_df[,c(1,10,7,3)]
    colnames(cancer_codes_df)= c("eid", "date","ICD10", "histology")
    cancer_codes_df
-}, future.seed = 4)
+})
 rm(date_of_cancer_diag, histology_of_cancer, type_of_cancer)
 cancer_data = do.call(rbind, cancer_data)
 cancer_data = unite(cancer_data,col = "ICD_hist", c("ICD10", "histology") ,sep = "_", remove = F )
@@ -235,7 +235,7 @@ cancer_data$death= !is.na(cancer_data$date_of_death)
 rm(date_of_death)
 
 #cause of death
-p_cause_of_death = read.table("C:/Users/bagil/Desktop/ukb/40001.txt", header = T)#40001
+p_cause_of_death = read.table("C:/Users/bagil/Desktop/ukb/rawdata/40001.txt", header = T)#40001
 p_cause_of_death = p_cause_of_death[, c(1,3)]
 p_cause_of_death = unique(p_cause_of_death)
 #View(p_cause_of_death[p_cause_of_death$eid %in% p_cause_of_death$eid[duplicated(p_cause_of_death$eid)],])
@@ -1685,7 +1685,54 @@ save(ukb_data, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_p
 
 ```
 
+#table for each cancer
+```{r}
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/ukb_data_ptv")
 
+gpca = paste0("gpca", 1:10)
+tumors = sort(unique(ukb_data$cancer_type))
+tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
+out_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_dfs/"
+
+#Tumors
+pblapply(tumors, function(t){
+  obj_name_f = paste0("female_", t)
+  filtering_df_f = ukb_data %>% 
+    filter(cancer_type == t & sex == "female")
+  assign(obj_name_f, filtering_df_f, envir = .GlobalEnv)
+  out_path_f = file.path(out_dir, paste0(obj_name_f))
+  save(list = obj_name_f, file = out_path_f)
+  obj_name_m = paste0("male_", t)
+  filtering_df_m = ukb_data %>% 
+    filter(cancer_type == t & sex == "male")
+  assign(obj_name_m, filtering_df_m, envir = .GlobalEnv)
+  out_path_m = file.path(out_dir, paste0(obj_name_m))
+  save(list = obj_name_m, file = out_path_m)
+   obj_name_all = t
+  filtering_df_all = ukb_data %>% 
+    filter(cancer_type == t)
+  assign(obj_name_all, filtering_df_all, envir = .GlobalEnv)
+  out_path_all = file.path(out_dir, paste0(obj_name_all))
+  save(list = obj_name_all, file = out_path_all)
+})
+
+nottumorous = ukb_data %>% 
+  filter(cancer_type == "No_cancer")
+tumorous_all = ukb_data %>% 
+  filter(cancer_type %in% tumors)
+tumorous_female = tumorous_all %>% 
+  filter(sex == "female")
+tumorous_male = tumorous_all %>% 
+  filter(sex == "male")
+
+
+save(nottumorous, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_dfs/nottumorous")
+save(tumorous_all, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_dfs/tumorous_all")
+save(tumorous_female, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_dfs/tumorous_female")
+save(tumorous_male, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_dfs/tumorous_male")
+
+
+```
 
 
 
