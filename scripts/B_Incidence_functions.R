@@ -501,7 +501,7 @@ fun_TumorSurvCoxDS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
   survdf = survdf %>% 
-    select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
+    dplyr::select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
   case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
   if(gender == "all") {
     tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
@@ -548,7 +548,7 @@ fun_TumorSurvForestDS = function(tumor = "all", gender = "all", geneset = c("ENS
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
   survdf = survdf %>% 
-    select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
+    dplyr::select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
   case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
   if(gender == "all") {
     tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
