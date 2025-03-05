@@ -9,8 +9,8 @@ date: "2025-02-07"
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
 #library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("tidyverse", "data.table", "magrittr", "clusterProfiler", "org.Hs.eg.db", "hgnc", "future.apply", "fastmatch", "survival", "pbapply", "forestmodel", "gridExtra")
-#"Rfast", , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", "ggpubr", , "Biostrings", , )
+Packages <- c("tidyverse", "data.table", "magrittr", "clusterProfiler", "org.Hs.eg.db", "hgnc", "future.apply", "fastmatch", "survival", "pbapply", "forestmodel", "gridExtra", "ggpubr")
+#"Rfast", , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", , )
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
@@ -171,96 +171,111 @@ ggsave(
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
 res = readRDS("Res/017/res_gsea_c7.rds")
 
-hot_tumors = c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male")
-nonim_tumors = c("Brain_female", "Brain_male", "Ovary_female", "Pancreas_female", "Pancreas_male")
+resF = res %>% 
+  filter(pPTVG < 0.1) %>%
+  filter(TS %in% c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male", "Brain_female", "Brain_male", "Ovary_female", "Pancreas_female", "Pancreas_male")) %>% 
+  mutate(g = ifelse(TS %in% c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male"), "hot", "cold"), .before = cancer_type)
 
-gseTermsAll = unique(res$ptv_type)
-resF = res %>% filter(pPTVG < 0.2, TS %in% c(hot_tumors, nonim_tumors))
+gseTermsF = unique(resF$ptv_type)
 plan(multisession(workers = 8))
-comp_ht_nimt = t(future_sapply(gseTermsAll, function(x) {
-  temp_ht = resF %>% filter(ptv_type == x, TS %in% hot_tumors)
-  temp_nimt = resF %>% filter(ptv_type == x, TS %in% nonim_tumors)
-  c(temp_ht %>% filter(coefPTV > 1) %>% nrow(),
-    temp_ht %>% filter(coefPTV > 1, pPTVG < 0.05) %>% nrow(),
-    temp_ht %>% filter(coefPTV < 1) %>% nrow(),
-    temp_ht %>% filter(coefPTV < 1, pPTVG < 0.05) %>% nrow(),
-    temp_nimt %>% filter(coefPTV > 1) %>% nrow(),
-    temp_nimt %>% filter(coefPTV > 1, pPTVG < 0.05) %>% nrow(),
-    temp_nimt %>% filter(coefPTV < 1) %>% nrow(),
-    temp_nimt %>% filter(coefPTV < 1, pPTVG < 0.05) %>% nrow())
+compDF = t(future_sapply(gseTermsF, function(x) {
+  c(resF %>% filter(ptv_type == x, g == "hot", coefPTV > 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, g == "hot", coefPTV > 1, pPTVG < 0.05) %>% nrow(),
+    resF %>% filter(ptv_type == x, g == "hot", coefPTV < 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, g == "hot", coefPTV < 1, pPTVG < 0.05) %>% nrow(),
+    resF %>% filter(ptv_type == x, g == "cold", coefPTV > 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, g == "cold", coefPTV > 1, pPTVG < 0.05) %>% nrow(),
+    resF %>% filter(ptv_type == x, g == "cold", coefPTV < 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, g == "cold", coefPTV < 1, pPTVG < 0.05) %>% nrow())
+})) #30 sec
+colnames(compDF) = c("over_hot_01", "over_hot_005", "under_hot_01", "under_hot_005",
+                     "over_cold_01", "over_cold_005", "under_cold_01", "under_cold_005")
+compDF = cbind.data.frame(id = gseTermsF, compDF)
+
+compDF %>% filter(over_hot_01 >= 3, under_hot_01 == 0, over_cold_01 == 0) %>% View()
+compDF %>% filter(over_hot_01 >= 3, under_hot_01 == 0, over_cold_01 == 0) %>% pull(id) -> gse_terms
+
+plots_all = future_lapply(gse_terms, function(g) {
+  genes = resF$genesENS[resF$ptv_type == g][1] %>% strsplit(";") %>% unlist()
+  fig_hot_all = fun_TumorIncForestPlot(tumor = c("Melanoma", "Lung", "Bladder", "Kidney"), gender = "all", geneset = genes)
+  fig_cold_all = fun_TumorIncForestPlot(tumor = c("BrainCNS", "Ovary", "Pancreas"), gender = "all", geneset = genes)
+  grid.arrange(fig_hot_all, fig_cold_all, ncol = 2, nrow = 1, top = g)
+})
+
+ggsave(
+  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/017/Hot_vs_cold_tumors_28terms.pdf", 
+  plot = marrangeGrob(plots_all, nrow=1, ncol=1), 
+  width = 15, height = 9
+)
+
+
+plots_all_2 = future_lapply(gse_terms, function(g) {
+  genes = resF$genesENS[resF$ptv_type == g][1] %>% strsplit(";") %>% unlist()
+  fig_hot_sep = ggarrange(plotlist = lapply(c("Melanoma_all", "Lung_all", "Bladder_all", "Kidney_all", 
+                                              "Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male"), function(z) {
+                                                fun_TumorIncForestPlot(tumor = strsplit(z, "_")[[1]][1], gender = strsplit(z, "_")[[1]][2], geneset = genes)
+                                              }), ncol = 4, nrow = 3)
+  fig_cold_sep = ggarrange(plotlist = lapply(c("BrainCNS_all", "Pancreas_all", 
+                                             "BrainCNS_female", "BrainCNS_male", "Ovary_female", "Pancreas_female", "Pancreas_male"), function(z) {
+                                               fun_TumorIncForestPlot(tumor = strsplit(z, "_")[[1]][1], gender = strsplit(z, "_")[[1]][2], geneset = genes)
+                                             }), ncol = 4, nrow = 2)
+  grid.arrange(fig_hot_sep, fig_cold_sep, ncol = 1, nrow = 2, top = g)
+})
+
+ggsave(
+  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/017/Hot_vs_cold_tumors_28terms_sep.pdf", 
+  plot = marrangeGrob(plots_all_2, nrow=1, ncol=1), 
+  width = 29, height = 21
+)
+
+library(tidyverse)
+library(rvest)
+
+gse_terms_data = list()
+gse_terms_gene_data = list()
+for(i in 1:length(gse_terms)) {
+  print(i)
+  gt = strsplit(gse_terms[i], "_")[[1]]
+  gt = paste(gt[2:length(gt)], collapse = "_")
+  url <-  paste0("https://www.gsea-msigdb.org/gsea/msigdb/human/geneset/", gt,".html")
+  df <- url %>% read_html() %>% html_nodes("table") %>% html_table(fill = T)
+  gse_terms_data[[i]] = df[[2]] %>% dplyr::slice(1:4) %>% dplyr::pull(X2)
+  gse_terms_gene_data[[i]] = df[[3]] %>% as.data.frame()
+}
+rm(i, gt, url, df)
+
+gse_terms_data = as.data.frame(do.call(rbind, gse_terms_data))
+colnames(gse_terms_data) = c("Standard_name", "Systematic_name", "Brief_description", "Full_description")
+gse_terms_data = cbind.data.frame(id = gse_terms, gse_terms_data)
+names(gse_terms_gene_data) = gse_terms
+
+tdf = t(future_sapply(gse_terms_data$id, function(g) {
+  genes = resF$genesENS[resF$ptv_type == g][1] %>% strsplit(";") %>% unlist()
+  cox_hot = fun_TumorIncCoxModel(tumor = c("Melanoma", "Lung", "Bladder", "Kidney"), gender = "all", geneset = genes)
+  cox_cold = fun_TumorIncCoxModel(tumor = c("BrainCNS", "Ovary", "Pancreas"), gender = "all", geneset = genes)
+  c(cox_hot, cox_cold)
 }))
-colnames(comp_ht_nimt) = c("over_ht_01", "over_ht_005", "under_ht_01", "under_ht_005",
-                           "over_nimt_01", "over_nimt_005", "under_nimt_01", "under_nimt_005")
-comp_ht_nimt = cbind.data.frame(id = gseTermsAll, comp_ht_nimt)
-comp_ht_nimt %>% filter(over_ht_01 >= 3, under_ht_01 == 0, over_nimt_01 == 0) %>% View()
+colnames(tdf) = c("hot_coxHR", "hot_coxP", "cold_coxHR", "cold_coxP")
+gse_terms_data = cbind.data.frame(gse_terms_data, tdf)
+rownames(gse_terms_data) = NULL
+saveRDS(gse_terms_data, file = "Res/017/gse_terms_data_hot_vs_cold.rds")
 
-comp_ht_nimt %>% filter(over_ht_01 >= 3, under_ht_01 == 0, over_nimt_01 == 0) %>% pull(id) -> gse_terms
+View(gse_terms_gene_data[["55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"]])
 
-
-plots_FP = future_lapply(gse_terms, function(g) {
-  genes = resF %>% filter(ptv_type == g) %>% dplyr::slice(1) %>% pull(genesENS) %>% strsplit(";") %>% unlist()
-  grid.arrange(fun_TumorIncForestPlot(tumor = unique(gsub("_female|_male", "", hot_tumors)), gender = "all", geneset = genes),
-               fun_TumorIncForestPlot(tumor = gsub("_female", "", grep("_female", hot_tumors, value = T)), gender = "female", geneset = genes),
-               fun_TumorIncForestPlot(tumor = gsub("_male", "", grep("_male", hot_tumors, value = T)), gender = "male", geneset = genes),
-               fun_TumorIncForestPlot(tumor = unique(gsub("_female|_male", "", nonim_tumors)), gender = "all", geneset = genes),
-               fun_TumorIncForestPlot(tumor = gsub("_female", "", grep("_female", nonim_tumors, value = T)), gender = "female", geneset = genes),
-               fun_TumorIncForestPlot(tumor = gsub("_male", "", grep("_male", nonim_tumors, value = T)), gender = "female", geneset = genes),
-               ncol=3, nrow = 2, top = g)
-})
-
-plots_INC = future_lapply(gse_terms[1:2], function(g) {
-  genes = resF %>% filter(ptv_type == g) %>% dplyr::slice(1) %>% pull(genesENS) %>% strsplit(";") %>% unlist()
-  ggdraw() + 
-    draw_plot(fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", hot_tumors)), gender = "all", geneset = genes), x = 0.05, y = .5, width = .3, height = .5) +
-    draw_plot(fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", hot_tumors, value = T)), gender = "female", geneset = genes), x = 0.35, y = .5, width = .3, height = .5) +
-    draw_plot(fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", hot_tumors, value = T)), gender = "male", geneset = genes), x = 0.65, y = .5, width = .3, height = .5) +
-    draw_plot(fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", nonim_tumors)), gender = "all", geneset = genes), x = 0.05, y = 0, width = .3, height = .5) +
-    draw_plot(fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", nonim_tumors, value = T)), gender = "female", geneset = genes), x = 0.35, y = 0, width = .3, height = .5) +
-    draw_plot(fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", nonim_tumors, value = T)), gender = "female", geneset = genes), x = 0.65, y = 0, width = .3, height = .5)
-  # grid.arrange(fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", hot_tumors)), gender = "all", geneset = genes),
-  #              fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", hot_tumors, value = T)), gender = "female", geneset = genes),
-  #              fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", hot_tumors, value = T)), gender = "male", geneset = genes),
-  #              fun_TumorIncPlot(tumor = unique(gsub("_female|_male", "", nonim_tumors)), gender = "all", geneset = genes),
-  #              fun_TumorIncPlot(tumor = gsub("_female", "", grep("_female", nonim_tumors, value = T)), gender = "female", geneset = genes),
-  #              fun_TumorIncPlot(tumor = gsub("_male", "", grep("_male", nonim_tumors, value = T)), gender = "female", geneset = genes),
-  #              ncol=3, nrow = 2, top = g)
-})
-
-ggsave(filename = "Plots/017/Hot_vs_Nonim_Tumors_03.pdf", plot = marrangeGrob(plots_INC, nrow = 1, ncol = 1), width = 40, height = 14)
+res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+res_fishtest %>% filter(SYMBOL %in% gse_terms_gene_data[["55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"]][,"GeneSymbol"]) %>% filter(category %in% c("Melanoma", "Lung", "Bladder", "Kidney", "Brain", "Ovary", "Pancreas")) %>% View()
 
 
+fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
+fun_TumorIncFishTest(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
+fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
+fun_TumorIncStat(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
+fun_TumorSurvCoxDS(tumor = "Lung", gender = "male", geneset = unlist(strsplit(resF$genesENS[resF$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
+
+```
 
 
-load("Objects/017/gsea_c7_genesets")
-# geneSets[["GSE21063_3H_VS_16H_ANTI_IGM_STIM_BCELL_UP"]] #Genes up-regulated in B lymphocytes stimulated by anti-IgM: 3h versus 16h., These data indicate NFATc1 as a key factor controlling B cell function.
-# geneSets[["GSE3982_MAC_VS_BASOPHIL_DN"]] #Genes down-regulated in comparison of macrophages versus basophils.
-genes = geneSets[["GSE21360_NAIVE_VS_PRIMARY_MEMORY_CD8_TCELL_DN"]] #Genes down-regulated in CD8 T cells: naïve versus 1' memory.
-# geneSets[["GSE21927_BALBC_VS_C57BL6_MONOCYTE_SPLEEN_UP"]] #Genes up-regulated in spleen CD11b cells: BALBc versus C57BL6 mouse strains.
-# geneSets[["GSE22886_IGM_MEMORY_BCELL_VS_BLOOD_PLASMA_CELL_UP"]] #Genes up-regulated in comparison of memory IgM B cells versus blood plasma cells. - kidney, melanoma, bladder - males
-# geneSets[["GSE12198_CTRL_VS_HIGH_IL2_STIM_NK_CELL_UP"]] #Genes up-regulated in NK cells: primary versus stimulated by high dose of IL2 - FEMALES
-
-fun_TumorIncForestPlot(tumor = unique(gsub("_female","", hot_tumors[grepl("female", hot_tumors)])), gender = "female", geneset = genes, gpca_nb = 10)
-
-
-ggplot(res[res$ptv_type == "288_GSE12198_CTRL_VS_HIGH_IL2_STIM_NK_CELL_UP",], mapping = aes(x = sex, y = coefPTV)) + geom_boxplot() + stat_compare_means()
-ggplot(res[res$ptv_type == "1968_GSE22886_IGM_MEMORY_BCELL_VS_BLOOD_PLASMA_CELL_UP",], mapping = aes(x = sex, y = coefPTV)) + geom_boxplot() + stat_compare_means()
-
-# geneSets[["GSE12366_NAIVE_VS_MEMORY_BCELL_DN"]] #Genes down-regulated in comparison of naive B cells versus memory B cells.
-# 
-# geneSets[["GSE339_EX_VIVO_VS_IN_CULTURE_CD4POS_DC_DN"]] #Genes down-regulated in comparison of ex vivo CD4 [GeneID=920] dendritic cells (DC) versus cultured CD4 [GeneID=920] DCs. - melanoma, bladder, lung
-
-
-#Reduce(intersect, geneSets[c("GSE21063_3H_VS_16H_ANTI_IGM_STIM_BCELL_UP", "GSE3982_MAC_VS_BASOPHIL_DN", "GSE21360_NAIVE_VS_PRIMARY_MEMORY_CD8_TCELL_DN", "GSE21927_BALBC_VS_C57BL6_MONOCYTE_SPLEEN_UP", "GSE22886_IGM_MEMORY_BCELL_VS_BLOOD_PLASMA_CELL_UP")])
-
-
-comp_ht_nimt %>% filter(over_ht_01 >= 3, under_ht_01 == 0, over_nimt_01 == 0) %>% pull(id) -> tempids
-res %>% 
-  filter(ptv_type %in% tempids, TS %in% c(hot_tumors, nonim_tumors)) %>% 
-  mutate(hot_tumors = TS %in% hot_tumors) %>% 
-  ggplot(mapping = aes(x = hot_tumors, y = coefPTV)) + 
-  geom_boxplot() +
-  facet_wrap(~ptv_type)
-
+```{r}
 #Between gender
 res %>% 
   filter(ptv_type %in% tempids, TS %in% hot_tumors) %>% 
@@ -275,6 +290,8 @@ res %>%
   facet_wrap(~ptv_type)
 
 ```
+
+
 
 ##All tumors
 
