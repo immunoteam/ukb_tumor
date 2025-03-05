@@ -569,30 +569,30 @@ fun_TumorSurvForestDS = function(tumor = "all", gender = "all", geneset = c("ENS
 
 
 
-res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
-genes = res_fishtest %>% dplyr::filter(category == "Melanoma", caseY > 5) %>% arrange(desc(OR)) %>% dplyr::slice(1:20) %>% pull(ENSEMBL)
-
-
-load("Objects/go_desc_list")
-hugos = go_desc_list[["antigen processing and presentation"]]
-library(clusterProfiler)
-library(org.Hs.eg.db)
-genes = unique(bitr(geneID = hugos, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")$ENSEMBL)
-genes = genes[!is.na(genes)]
-rm(go_desc_list, hugos)
-
-broca_geneset = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
-genes = unique(bitr(geneID = broca_geneset, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")$ENSEMBL)
-
-fun_TumorIncForestPlot(tumor = "Melanoma", gender = "all", geneset = genes)
-fun_TumorIncCoxModel(tumor = "Melanoma", gender = "all", geneset = genes)
-fun_TumorIncFishTest(tumor = "Melanoma", gender = "all", geneset = genes)
-fun_TumorIncPlot(tumor = "Melanoma", gender = "all", geneset = genes)
-
-
-fun_TumorSurvPlotDS(tumor = "Melanoma", gender = "female", geneset = genes)
-fun_TumorSurvPlotOS(tumor = "Melanoma", gender = "female", geneset = genes)
-#Overall survival plot function
-
-#Disease specific survival plot function
-
+# res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+# genes = res_fishtest %>% dplyr::filter(category == "Melanoma", caseY > 5) %>% arrange(desc(OR)) %>% dplyr::slice(1:20) %>% pull(ENSEMBL)
+# 
+# 
+# load("Objects/go_desc_list")
+# hugos = go_desc_list[["antigen processing and presentation"]]
+# library(clusterProfiler)
+# library(org.Hs.eg.db)
+# genes = unique(bitr(geneID = hugos, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")$ENSEMBL)
+# genes = genes[!is.na(genes)]
+# rm(go_desc_list, hugos)
+# 
+# broca_geneset = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
+# genes = unique(bitr(geneID = broca_geneset, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")$ENSEMBL)
+# 
+# fun_TumorIncForestPlot(tumor = "Melanoma", gender = "all", geneset = genes)
+# fun_TumorIncCoxModel(tumor = "Melanoma", gender = "all", geneset = genes)
+# fun_TumorIncFishTest(tumor = "Melanoma", gender = "all", geneset = genes)
+# fun_TumorIncPlot(tumor = "Melanoma", gender = "all", geneset = genes)
+# 
+# 
+# fun_TumorSurvPlotDS(tumor = "Melanoma", gender = "female", geneset = genes)
+# fun_TumorSurvPlotOS(tumor = "Melanoma", gender = "female", geneset = genes)
+# #Overall survival plot function
+# 
+# #Disease specific survival plot function
+# 
