@@ -40,7 +40,7 @@ ukb_dataF$death_type = icd_mapping$cancer_type[fmatch(substr(ukb_dataF$cause_of_
 #Some controversial patients
 ukb_dataF %>% filter(cancer_type == "No_cancer") %>% filter(substr(cause_of_death,1,1) == "C") %>% nrow()
 ukb_dataF %>% filter(cancer_type == "No_cancer") %>% filter(substr(cause_of_death,1,1) == "C") %>% pull(eid) -> tempeids
-View(ukb_dataF[ukb_dataF$eid %fin% tempeids, c(1:23,64:86)])
+View(ukb_dataF[ukb_dataF$eid %fin% tempeids, c(1:23,86)])
 View(table(ukb_dataF$death_type[ukb_dataF$eid %fin% tempeids]))
 ukb_dataF %<>% filter(!eid %in% tempeids) #424,260
 rm(tempeids, icd_mapping)
@@ -50,7 +50,7 @@ ukb_dataF$cancer_type = gsub("/| |-", "", ukb_dataF$cancer_type)
 ukb_dataF$death_type = gsub("/| |-", "", ukb_dataF$death_type)
 
 sel_gpcas = paste0("gpca", 1:40)
-ukb_dataF %<>% dplyr::select(eid, birthdate, sex, death, date_of_death, cause_of_death, death_type, diag_date, cancer_type, all_of(sel_gpcas)) #424,260 #49 columns
+ukb_dataF %<>% dplyr::select(eid, birthdate, sex, age, death, date_of_death, cause_of_death, death_type, diag_date, cancer_type, all_of(sel_gpcas)) #424,260 #50 columns
 ukb_dataF %<>% filter_at(.vars = vars(starts_with("gpca")), .vars_predicate = any_vars(!is.na(.))) #424,260
 rm(sel_gpcas)
 ```
