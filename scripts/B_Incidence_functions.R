@@ -201,77 +201,17 @@ fun_TumorIncStat = function(tumor = "Melanoma", gender = "all", geneset = c("ENS
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tumor_data %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
   if(ptv_burden_cat == T) {tumor_data$PTVb = as.factor(ifelse(tumor_data$PTVb == 0, 0, 1))}
-  
-  # cuminc(Surv(time, status) ~ 1, data = tumor_data)
-  # 
-  # cuminc(Surv(time, status) ~ 1, data = tumor_data) %>% 
-  #   ggcuminc() + 
-  #   labs(
-  #     x = "Days"
-  #   ) + 
-  #   add_confidence_interval() +
-  #   add_risktable()
-  
-  # cuminc(Surv(time, status) ~ 1, data = tumor_data) %>% 
-  #   ggcuminc(outcome = c("3")) +
-  #   ylim(c(0, 1)) + 
-  #   labs(
-  #     x = "Days"
-  #   )
-  
-  # cuminc(Surv(time, status) ~ PTVb, data = tumor_data) %>%
-  #   tbl_cuminc(times = seq(5000,30000,5000), label_header = "**{time/365.25}-year cuminc**") %>%
-  #   add_p()
-
   cuminc(Surv(time, status) ~ PTVb, data = tumor_data) %>%
     ggcuminc() +
     labs(x = "Days") +
     add_confidence_interval() +
     add_risktable() +
     add_pvalue()
-  
-  #Competing risk regression
-  #I. Subdistribution hazards; HR>1 - significantly associated with increased hazard of death due to melanoma
-  # crr(Surv(time, status) ~ PTVb, data = tumor_data)
-  # crr(Surv(time, status) ~ PTVb, data = tumor_data) %>%
-  #  tbl_regression(exp = TRUE)
-  #II. Cause-specific hazards
-  # coxph(Surv(time, ifelse(status == 1, 1, 0)) ~ PTVb, data = tumor_data) %>% tbl_regression(exp = TRUE)
-  
-  # tumor_data$inc_event = as.factor(ifelse(tumor_data$status == 1, 0, 1))
-  # inc_obj = cuminc(Surv(time, inc_event) ~ PTVb, data = tumor_data)
-  # grayp = inc_obj$cmprsk$Tests[,"pv"] %>% round(digits = 4)
-  # if(gender == "all") {
-  #   tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
-  # } else {
-  #   tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
-  # }
-  # inc_plot = ggcuminc(x = inc_obj) +
-  #   add_confidence_interval() +
-  #   scale_ggsurvfit() +
-  #   annotate(geom = "text", label = paste0("\nP = ", grayp), x = 5000, y = Inf ) +
-  #   xlab("Time (days)") +
-  #   ggtitle(tt) +
-  #   theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), legend.position = "right")
-  # 
-  # inc_table = tbl_cuminc(x = cuminc(Surv(time, inc_event) ~ PTVb, data = tumor_data), label_header = "{time} days", times = seq(5000,30000,5000)) %>% 
-  #   add_nevent(location = c("label", "level")) %>% 
-  #   add_n(location = c("label", "level")) %>% 
-  #   add_p() %>%
-  #   modify_fmt_fun(p.value ~ function(x) ifelse(is.na(x), NA, format(x, digits = 3, scientific = TRUE)))
-  # inc_table_df = as.data.frame(inc_table)
-  # inc_table_grob = tableGrob(inc_table_df)
-  # library()
-  # out_fig = ggdraw() + 
-  #   draw_plot(inc_plot, x = 0, y = .5, width = 1, height = .5) +
-  #   draw_plot(inc_table_grob, x = 0.15, y = 0, width = 0.7, height = .5)
-  # out_fig
 }
 
 
 
-#Overall survival
-##KM plot
+
 fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -302,11 +242,12 @@ fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG0
     mutate(surv_time = as.numeric(m - diag_date))
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
-  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
   if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   }
   survfit2(Surv(surv_time, surv_event) ~ PTVb, data = survdf) %>% 
     ggsurvfit() +
@@ -320,7 +261,7 @@ fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG0
     labs(title = tt)
 }
 
-##Cox model
+
 fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -367,7 +308,7 @@ fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   out
 }
 
-##Forest plot
+
 fun_TumorSurvForestOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -401,25 +342,20 @@ fun_TumorSurvForestOS = function(tumor = "all", gender = "all", geneset = c("ENS
   sel_gpcas = paste0("gpca", 1:gpca_nb)
   survdf = survdf %>% 
     select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
-  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
   if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   }
   myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
   res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
   fm = forest_model(model = res.cox, return_data = T)
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
-  } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
-  }
   fm$plot + labs(title = tt)
 }
 
-#Disease specific survival
-##KM plot
+
 fun_TumorSurvPlotDS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -450,11 +386,12 @@ fun_TumorSurvPlotDS = function(tumor = "all", gender = "all", geneset = c("ENSG0
     mutate(surv_time = as.numeric(m - diag_date))
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
-  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
   if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   }
   survfit2(Surv(surv_time, surv_event) ~ PTVb, data = survdf) %>% 
     ggsurvfit() +
@@ -468,7 +405,7 @@ fun_TumorSurvPlotDS = function(tumor = "all", gender = "all", geneset = c("ENSG0
     labs(title = tt)
 }
 
-##Cox model
+
 fun_TumorSurvCoxDS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -515,7 +452,7 @@ fun_TumorSurvCoxDS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   out
 }
 
-##Forest plot
+
 fun_TumorSurvForestDS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -549,20 +486,16 @@ fun_TumorSurvForestDS = function(tumor = "all", gender = "all", geneset = c("ENS
   sel_gpcas = paste0("gpca", 1:gpca_nb)
   survdf = survdf %>% 
     dplyr::select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
-  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
   if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   }
   myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
   res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
   fm = forest_model(model = res.cox, return_data = T)
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
-  } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
-  }
   fm$plot + labs(title = tt)
 }
 

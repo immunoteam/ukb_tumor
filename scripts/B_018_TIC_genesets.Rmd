@@ -10,7 +10,11 @@ source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
 ```
 
 ```{r}
-load("Objects/TIC_dfs/Melanoma_Promote_immunity")
+tic_data = readRDS("Objects/018/tic_comm.rds")
+tic_data %>% group_by(Relation_To_Immunity_Or_Cancer) %>% summarise(n = n()) %>% View()
+tumors = sort(unique(gsub("_male|_female", "", list.files("Objects/000_Sub_datasets"))))
+tblForFilt = expand.grid(relation = c("all", "Inhibit immunity", "Promote tumorigenesis", "Promote immunity", "Inhibit tumorigenesis"), )
+
 load("Objects/TIC_dfs/Melanoma_Inhibit_immunity")
 load("Objects/TIC_dfs/Melanoma_Promote_tumorigenesis")
 load("Objects/TIC_dfs/Melanoma_")
