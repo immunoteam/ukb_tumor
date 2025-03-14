@@ -1,0 +1,218 @@
+---
+title: "020_More_genesets_Shet_filter"
+output: html_document
+date: "2025-03-14"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("readxl", "data.table", "tidyverse", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "Rfast", "hgnc")
+#Packages <- c(, , "survival", "pbapply", "forestmodel", "gridExtra", "ggpubr", "rvest")
+#, , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", , )
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+# pal_npg("nrc")(9)
+# scales::show_col(pal_npg("nrc")(9))
+# pal_npg("nrc", alpha = 0.8)(9)
+# scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+options(future.globals.maxSize= 2147483648) #2048*1024^2 2GB/workers
+```
+
+#PTV burden table
+SHET: https://www.nature.com/articles/s41588-024-01820-9#Sec34
+
+```{r}
+ptvb_woMAF = fread("PTVvars/PTVburden_without_MAF-001.tsv")
+ptvb_MAF103 = fread("PTVvars/ultra_rare_variants_MAF_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+patients = sort(unique(c(ptvb_woMAF$Patient.ID, ptvb_MAF103$Patient.ID, ptvb_MAF104$Patient.ID)))
+
+shet_data = read_excel("Objects/SHET/41588_2024_1820_MOESM4_ESM.xlsx", sheet = 2)
+shet_001_ensg = shet_data %>% filter(post_mean > 0.01) %>% pull(ensg) %>% as.character()
+shet_005_ensg = shet_data %>% filter(post_mean > 0.05) %>% pull(ensg) %>% as.character()
+shet_01_ensg = shet_data %>% filter(post_mean > 0.1) %>% pull(ensg) %>% as.character()
+
+ptv_data = data.frame(eid = patients)
+
+#WO MAF
+View(head(ptvb_woMAF))
+ptvb_woMAF %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+ukb_shet_ptv = t(future_sapply(ptvb_woMAF$ptvgenes, function(x) {
+  ensgs = unlist(strsplit(x, ","), use.names = F)
+  c(paste0(ensgs[ensgs %fin% shet_001_ensg], collapse = ","),
+  paste0(ensgs[ensgs %fin% shet_005_ensg], collapse = ","),
+  paste0(ensgs[ensgs %fin% shet_01_ensg], collapse = ","))
+}))
+View(head(ukb_shet_ptv))
+rownames(ukb_shet_ptv) = NULL
+colnames(ukb_shet_ptv) = c("ptvgenes_shet001", "ptvgenes_shet005", "ptvgenes_shet01")
+ptvb_woMAF = cbind.data.frame(ptvb_woMAF, ukb_shet_ptv)
+ptv_data %<>% left_join(ptvb_woMAF, by = "eid")
+rm(ptvb_woMAF, ukb_shet_ptv)
+
+#MAF10-3
+ptvb_MAF103 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes_maf103"))
+ukb_maf103_shet_ptv = t(future_sapply(ptvb_MAF103$ptvgenes_maf103, function(x) {
+  ensgs = unlist(strsplit(x, ","), use.names = F)
+  c(paste0(ensgs[ensgs %fin% shet_001_ensg], collapse = ","),
+  paste0(ensgs[ensgs %fin% shet_005_ensg], collapse = ","),
+  paste0(ensgs[ensgs %fin% shet_01_ensg], collapse = ","))
+}))
+View(head(ukb_maf103_shet_ptv))
+rownames(ukb_maf103_shet_ptv) = NULL
+colnames(ukb_maf103_shet_ptv) = c("ptvgenes_maf103_shet001", "ptvgenes_maf103_shet005", "ptvgenes_maf103_shet01")
+ptvb_MAF103 = cbind.data.frame(ptvb_MAF103, ukb_maf103_shet_ptv)
+ptv_data %<>% left_join(ptvb_MAF103, by = "eid")
+rm(ptvb_MAF103, ukb_maf103_shet_ptv)
+
+#MAF 10-4
+ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes_maf104"))
+ukb_maf104_shet_ptv = t(future_sapply(ptvb_MAF104$ptvgenes_maf104, function(x) {
+  ensgs = unlist(strsplit(x, ","), use.names = F)
+  c(paste0(ensgs[ensgs %fin% shet_001_ensg], collapse = ","),
+  paste0(ensgs[ensgs %fin% shet_005_ensg], collapse = ","),
+  paste0(ensgs[ensgs %fin% shet_01_ensg], collapse = ","))
+}))
+View(head(ukb_maf104_shet_ptv))
+rownames(ukb_maf104_shet_ptv) = NULL
+colnames(ukb_maf104_shet_ptv) = c("ptvgenes_maf104_shet001", "ptvgenes_maf104_shet005", "ptvgenes_maf104_shet01")
+ptvb_MAF104 = cbind.data.frame(ptvb_MAF104, ukb_maf104_shet_ptv)
+ptv_data %<>% left_join(ptvb_MAF104, by = "eid")
+rm(ptvb_MAF104, ukb_maf104_shet_ptv)
+
+rm(shet_data, shet_001_ensg, shet_005_ensg, shet_01_ensg)
+colnames(ptv_data)
+
+ukb_ptvb = t(future_apply(ptv_data, 1, function(x) {
+  lengths(strsplit(x[2:13], ","))
+}))
+View(head(ukb_ptvb))
+colnames(ukb_ptvb) = gsub("ptvgenes", "ptvb", colnames(ukb_ptvb))
+
+ptv_data = cbind.data.frame(ptv_data[,1], ukb_ptvb, ptv_data[,2:13])
+colnames(ptv_data)[1] = "eid"
+rm(ukb_ptvb)
+
+saveRDS(ptv_data, file = "Objects/020/ptv_data_250314.rds")
+
+ensgs_ukb_all = sort(unique(unlist(strsplit(ptv_data$ptvgenes, ","), use.names = F)))
+Table(sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf103, ","), use.names = F))) %fin% ensgs_ukb_all)
+Table(sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf104, ","), use.names = F))) %fin% ensgs_ukb_all)
+sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf104, ","), use.names = F)))[!sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf104, ","), use.names = F))) %fin% ensgs_ukb_all][1:10]
+```
+
+#Genesets
+##GO
+
+```{r}
+go_terms = fread("Objects/go_terms.txt") #https://amigo.geneontology.org/amigo/search/bioentity
+go_terms %<>% filter(grepl("UniProt", V1))
+go_terms$V1 = gsub("UniProtKB:", "", go_terms$V1)
+go_terms$V10 = gsub("PANTHER:", "", go_terms$V10)
+go_terms = go_terms[,c(2,1,6,7,5,10,11)]
+colnames(go_terms) = c("Gene", "UniProtKB", "Protein", "GO_terms", "GO_descriptions", "PANTHER_family", "PANTHER_description")
+
+go_terms_list = strsplit(go_terms$GO_descriptions, "\\|")
+names(go_terms_list) = go_terms$Gene
+
+go_data = data.frame(description = sort(unique(unlist(go_terms_list, use.names = F))))
+plan(multisession(workers = 4))
+go_symbols = future_lapply(go_data$description, function(x) names(go_terms_list)[sapply(go_terms_list, function(z) x %fin% z)])
+names(go_symbols) = gsub("[^[:alnum:] ]", "", go_data$description)
+names(go_symbols) = gsub(" ", "", names(go_symbols))
+
+go_data$n_genes = lengths(go_symbols)
+go_data$description = gsub("[^[:alnum:] ]", "", go_data$description)
+go_data$description = gsub(" ", "", go_data$description)
+rm(go_terms, go_terms_list)
+
+hugo_symbols_unique = sort(unique(unlist(go_symbols, use.names = F)))
+# length(hugo_symbols_unique[is.na(hugo_symbols_unique)])
+# length(na.omit(hugo_symbols_unique))
+gene_match = bitr(geneID = hugo_symbols_unique, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+
+go_ensgs = future_lapply(go_symbols, function(x) gene_match %>% filter(SYMBOL %in% x) %>% pull(ENSEMBL))
+#Table(names(go_ensgs) == names(go_symbols))
+
+save(go_ensgs, go_symbols, file = "Objects/020/gene_ontology_genesets") #genes of GO terms
+```
+
+##OMIM
+https://omim.org/
+Search for immunodeficiency
+
+```{r}
+omim_imdef = fread("Objects/015/OMIM_Immunodeficiency.tsv")
+colnames(omim_imdef) = gsub(" ", "_", colnames(omim_imdef))
+omim_imdef$MIM_Number = as.numeric(gsub("\\*|\\#|%", "", omim_imdef$MIM_Number))
+
+mim_gene_match = fread("Objects/015/MIM_Gene_match.txt")
+colnames(mim_gene_match) = gsub(" ", "_", colnames(mim_gene_match))
+colnames(mim_gene_match) = gsub("\\(|\\)", "", colnames(mim_gene_match))
+omim_imdef %<>% left_join(mim_gene_match, by = "MIM_Number")
+rm(mim_gene_match)
+
+omim_imdef$Ensembl_Gene_ID_Ensembl[omim_imdef$Approved_Gene_Symbol_HGNC == "CCL3L1"] = "ENSG00000277796"
+omim_imdef$Ensembl_Gene_ID_Ensembl[omim_imdef$Approved_Gene_Symbol_HGNC == "KIR3DS1"] = "ENSG00000275434"
+
+omim_immunodeficiency_ensgs = sort(unique(omim_imdef$Ensembl_Gene_ID_Ensembl))
+omim_immunodeficiency_ensgs = omim_immunodeficiency_ensgs[omim_immunodeficiency_ensgs != ""]
+
+saveRDS(omim_immunodeficiency_ensgs, file = "Objects/020/omim_immunodeficiency_geneset.rds")
+```
+
+##Wiki pathways
+
+```{r}
+hgnc_data = import_hgnc_dataset(file = "https://storage.googleapis.com/public-download-files/hgnc/tsv/tsv/hgnc_complete_set.txt")
+load("Objects/016/hs_rwpw")
+
+#plan(multisession(workers = 4))
+#require(RCurl)
+#require(XML)
+plan(multisession(workers = 4))
+wiki_symbols = future_lapply(hs_rwpw$datanodes, function(x) {
+  temp = toupper(trimws(unlist(strsplit(x, ","), use.names = F)))
+  temp[temp %in% hgnc_data$symbol]
+})
+names(wiki_symbols) = hs_rwpw$id
+
+hugo_symbols_unique = sort(unique(unlist(wiki_symbols, use.names = F)))
+gene_match = bitr(geneID = hugo_symbols_unique, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+
+wiki_ensgs = future_lapply(wiki_symbols, function(x) gene_match %>% filter(SYMBOL %in% x) %>% pull(ENSEMBL))
+#Table(names(wiki_ensgs) == names(wiki_symbols))
+
+save(wiki_ensgs, wiki_symbols, file = "Objects/020/wikipath_genesets")
+```
+
+#GSEA C7 gene sets
+
+```{r}
+plan(multisession(workers = 4))
+gseaGeneSets = read.gmt("Raw/c7.all.v2024.1.Hs.symbols.gmt")
+gsIDs = sort(unique(as.character(gseaGeneSets$term)))
+gsea_c7_symbols = future_lapply(gsIDs, function(x) gseaGeneSets %>% filter(term == x) %>% pull(gene))
+
+table(lengths(gsea_c7_symbols))
+names(gsea_c7_symbols) = gsIDs
+
+hugo_symbols_unique = sort(unique(unlist(gsea_c7_symbols, use.names = F)))
+gene_match = bitr(geneID = hugo_symbols_unique, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+
+gsea_c7_ensgs = future_lapply(gsea_c7_symbols, function(x) gene_match %>% filter(SYMBOL %in% x) %>% pull(ENSEMBL))
+
+save(gsea_c7_ensgs, gsea_c7_symbols, file = "Objects/020/gsea_c7_genesets")
+```
+
+```{r}
+source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+
+
+```
+

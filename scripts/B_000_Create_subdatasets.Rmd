@@ -22,7 +22,7 @@ options(dplyr.summarise.inform = FALSE)
 ```
 
 
-#Tumorous datasets
+#Dataset
 
 ```{r}
 ukb_data_raw = readRDS("Objects/ukb_data.rds")
@@ -66,9 +66,9 @@ length(unique(nottumorous_all$eid)) == nrow(nottumorous_all)
 #  ))
 nottumorous_female = ukb_dataF %>% dplyr::filter(cancer_type == "No_cancer", sex == "female")
 nottumorous_male = ukb_dataF %>% dplyr::filter(cancer_type == "No_cancer", sex == "male")
-saveRDS(nottumorous_all, file = "Objects/000_Sub_datasets/nottumorous_all.rds")
-saveRDS(nottumorous_female, file = "Objects/000_Sub_datasets/nottumorous_female.rds")
-saveRDS(nottumorous_male, file = "Objects/000_Sub_datasets/nottumorous_male.rds")
+saveRDS(nottumorous_all, file = "Objects/000_Sub_datasets/nottumorous_all.rds") #292,428
+saveRDS(nottumorous_female, file = "Objects/000_Sub_datasets/nottumorous_female.rds") #158,709
+saveRDS(nottumorous_male, file = "Objects/000_Sub_datasets/nottumorous_male.rds") #133,719
 rm(nottumorous_all, nottumorous_female, nottumorous_male)
 ```
 
@@ -77,19 +77,6 @@ rm(nottumorous_all, nottumorous_female, nottumorous_male)
 ```{r}
 tumors = sort(unique(ukb_dataF$cancer_type))
 tumors = tumors[!(tumors %in% c("Benign", "Hydatidiform_mole", "No_cancer", "other", "undef"))]
-
-tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
-tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
-  ukb_dataF %>% 
-    filter(cancer_type == x[1], sex == x[2]) %>% 
-    pull(eid) %>% 
-    unique() %>% 
-    length()
-})
-tumor_freq_data %<>% 
-  filter(n>=100) %>% 
-  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n") #42
-save(tumor_freq_data, file = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
 
 tumorous_all = ukb_dataF %>% 
   dplyr::filter(cancer_type %in% tumors)
@@ -109,9 +96,9 @@ tumorous_all %<>%
 tumorous_female = ukb_dataF %>% dplyr::filter(cancer_type %in% tumors, sex == "female") %>% arrange(diag_date) %>% distinct(eid, .keep_all = T)
 tumorous_male = ukb_dataF %>% dplyr::filter(cancer_type %in% tumors, sex == "male") %>% arrange(diag_date) %>% distinct(eid, .keep_all = T)
 
-saveRDS(tumorous_all, file = "Objects/000_Sub_datasets/tumorous_all.rds")
-saveRDS(tumorous_female, file = "Objects/000_Sub_datasets/tumorous_female.rds")
-saveRDS(tumorous_male, file = "Objects/000_Sub_datasets/tumorous_male.rds")
+saveRDS(tumorous_all, file = "Objects/000_Sub_datasets/tumorous_all.rds") #58,765
+saveRDS(tumorous_female, file = "Objects/000_Sub_datasets/tumorous_female.rds") #29,945
+saveRDS(tumorous_male, file = "Objects/000_Sub_datasets/tumorous_male.rds") #28,820
 rm(tumorous_all, tumorous_female, tumorous_male)
 ```
 
@@ -129,6 +116,19 @@ lapply(tumors, function(t) {
 ##Dataset creation
 
 ```{r}
+tumor_freq_data = expand.grid(cancer_type = tumors, sex = c("female", "male"), stringsAsFactors = F)
+tumor_freq_data$n = apply(tumor_freq_data, 1, function(x) {
+  ukb_dataF %>% 
+    filter(cancer_type == x[1], sex == x[2]) %>% 
+    pull(eid) %>% 
+    unique() %>% 
+    length()
+})
+tumor_freq_data %<>% 
+  filter(n>=100) %>% 
+  mutate(TS = paste(cancer_type, sex, sep = "_"), .before = "n") #42
+save(tumor_freq_data, file = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+
 apply(tumor_freq_data, 1, function(ts) {
   tumorous = ukb_dataF %>% filter(cancer_type == ts[1], sex == ts[2]) %>% arrange(diag_date) %>% distinct(eid, .keep_all = T)
   saveRDS(tumorous, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ts[3], ".rds"))
