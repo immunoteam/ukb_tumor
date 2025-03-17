@@ -98,7 +98,27 @@ ptv_data = cbind.data.frame(ptv_data[,1], ukb_ptvb, ptv_data[,2:13])
 colnames(ptv_data)[1] = "eid"
 rm(ukb_ptvb)
 
-saveRDS(ptv_data, file = "Objects/020/ptv_data_250314.rds")
+saveRDS(ptv_data, file = "Objects/020/PTVs/ptv_data_250314.rds")
+
+ptv_data = readRDS("Objects/020/PTVs/ptv_data_250314.rds")
+
+future_sapply(grep("ptvb", colnames(ptv_data), value = T), function(x) {
+  ptvb = ptv_data[,x]
+  names(ptvb) = ptv_data$eid
+  saveRDS(ptvb, file = paste0("Objects/020/PTVs/", x, ".rds"))
+})
+
+
+
+
+
+
+ptvb = ptv_data$ptvb_shet001
+names(ptvb) = ptv_data$eid
+saveRDS(ptvb, file = "Objects/020/PTVs/ptvb.rds")
+
+
+
 
 ensgs_ukb_all = sort(unique(unlist(strsplit(ptv_data$ptvgenes, ","), use.names = F)))
 Table(sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf103, ","), use.names = F))) %fin% ensgs_ukb_all)
@@ -191,7 +211,7 @@ wiki_ensgs = future_lapply(wiki_symbols, function(x) gene_match %>% filter(SYMBO
 save(wiki_ensgs, wiki_symbols, file = "Objects/020/wikipath_genesets")
 ```
 
-#GSEA C7 gene sets
+##GSEA C7 gene sets
 
 ```{r}
 plan(multisession(workers = 4))
@@ -210,9 +230,20 @@ gsea_c7_ensgs = future_lapply(gsea_c7_symbols, function(x) gene_match %>% filter
 save(gsea_c7_ensgs, gsea_c7_symbols, file = "Objects/020/gsea_c7_genesets")
 ```
 
+##TIC
+
 ```{r}
-source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+tic_data = readRDS("Objects/018/tic_comm.rds")
+tic_data %>% group_by(Relation_To_Immunity_Or_Cancer) %>% summarise(n = n()) %>% View()
+tic_data %>% group_by(Relation_To_Immunity_Or_Cancer) %>% summarise(n = n()) %>% arrange(desc(n)) %>% dplyr::slice(1:4) %>% pull(Relation_To_Immunity_Or_Cancer) -> relations
+tic_ensgs = lapply(relations, function(x) {
+  tic_data %>% filter(Relation_To_Immunity_Or_Cancer == x) %>% pull(ENSMB) %>% grep("ENSG", ., value = T) %>% strsplit(., ",") %>% unlist() %>% unique() %>% sort()
+})
+names(tic_ensgs) = gsub(" ", "_", relations)
+ensg_unique = sort(unique(unlist(tic_ensgs, use.names = F)))
+gene_match = bitr(geneID = ensg_unique, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
+tic_symbols = lapply(tic_ensgs, function(x) gene_match$SYMBOL[fmatch(x, gene_match$ENSEMBL)])
 
-
+save(tic_ensgs, tic_symbols, file = "Objects/020/tic_genesets")
 ```
 

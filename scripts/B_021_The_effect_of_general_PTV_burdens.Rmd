@@ -1,0 +1,195 @@
+---
+title: "021_The_effect_of_general_PTV_burdens"
+output: html_document
+date: "2025-03-14"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("readxl", "data.table", "tidyverse", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "Rfast", "hgnc", "survival", "forestmodel", "gridExtra", "ggpubr", "ComplexHeatmap")
+#Packages <- c( "pbapply", , "rvest")
+#, , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , , , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", , )
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+# pal_npg("nrc")(9)
+# scales::show_col(pal_npg("nrc")(9))
+# pal_npg("nrc", alpha = 0.8)(9)
+# scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+options(future.globals.maxSize= 2147483648) #2048*1024^2 2GB/workers
+```
+
+#Tumor incidence function
+
+```{r}
+fun_TumorIncForestPlot_v2 = function(tumor = "all", control = "nottumorous", gender = "all", ptvb_type = "ptvb", ptv_burden_cat = FALSE, gpca_nb = 10, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/020/PTVs/") {
+  if(control == "nottumorous" & gender == "all") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
+  } else if(control == "nottumorous" & gender == "female") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_female.rds"))
+  } else if(control == "nottumorous" & gender == "male") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_male.rds"))
+  }
+  m = max(control_data$date_of_death, na.rm = T)
+  control_data %<>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(m - birthdate)
+    )) %>% 
+    mutate(status = 0)
+  tumor_data = bind_rows(lapply(tumor, function(tmr) {
+    if(tmr == "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
+    } else if(tmr == "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
+    } else if(tmr != "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
+    } else if(tmr != "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
+    }
+  }))
+  tumor_data %<>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 1)
+  tempdf = rbind(tumor_data, control_data)
+  rm(tumor_data, control_data)
+  ptvb = readRDS(paste0(ptv_dir, ptvb_type, ".rds"))
+  tempdf$PTVb = ptvb[fmatch(tempdf$eid, names(ptvb))]
+  if(ptv_burden_cat == T | tempdf %>% filter(cancer_type != "No_cancer") %>% pull(PTVb) %>% unique() %>% length() < 5) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
+  case_n_ptvb_1 = tempdf %>% filter(cancer_type != "No_cancer", PTVb > 0) %>% nrow()
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(tempdf %>% filter(cancer_type != "No_cancer", PTVb > 0) %>% nrow() > 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, all_of(sel_gpcas))
+  } else if(tempdf %>% filter(cancer_type != "No_cancer", PTVb > 0) %>% nrow() > 0 & gender != "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, all_of(sel_gpcas))
+  } else if(tempdf %>% filter(cancer_type != "No_cancer", PTVb > 0) %>% nrow() == 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
+  } else {
+    tempdf %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+  res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+  fm = forest_model(model = res.cox, return_data = T)
+  if(gender == "all") {
+    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1)
+  } else {
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1)
+  }
+  fm$plot + labs(title = tt)
+}
+
+
+fun_TumorIncCoxModel_v2 = function(tumor = "all", control = "nottumorous", gender = "all", ptvb_type = "ptvb", ptv_burden_cat = FALSE, gpca_nb = 10, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/020/PTVs/") {
+  if(control == "nottumorous" & gender == "all") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
+  } else if(control == "nottumorous" & gender == "female") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_female.rds"))
+  } else if(control == "nottumorous" & gender == "male") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_male.rds"))
+  }
+  m = max(control_data$date_of_death, na.rm = T)
+  control_data %<>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(m - birthdate)
+    )) %>% 
+    mutate(status = 0)
+  tumor_data = bind_rows(lapply(tumor, function(tmr) {
+    if(tmr == "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
+    } else if(tmr == "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
+    } else if(tmr != "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
+    } else if(tmr != "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
+    }
+  }))
+  tumor_data %<>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 1)
+  tempdf = rbind(tumor_data, control_data)
+  rm(tumor_data, control_data)
+  ptvb = readRDS(paste0(ptv_dir, ptvb_type, ".rds"))
+  tempdf$PTVb = ptvb[fmatch(tempdf$eid, names(ptvb))]
+  if(ptv_burden_cat == T | tempdf %>% filter(cancer_type != "No_cancer") %>% pull(PTVb) %>% unique() %>% length() < 5) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(tempdf %>% filter(cancer_type != "No_cancer", PTVb > 0) %>% nrow() > 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, all_of(sel_gpcas))
+  } else if(tempdf %>% filter(cancer_type != "No_cancer", PTVb > 0) %>% nrow() > 0 & gender != "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, all_of(sel_gpcas))
+  } else if(tempdf %>% filter(cancer_type != "No_cancer", PTVb > 0) %>% nrow() == 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
+  } else {
+    tempdf %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+  res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+    out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
+  } else {
+    out = c(NA, NA)
+  }
+  names(out) = c("HR", "Pvalue")
+  out
+}
+
+
+
+
+c(Fishers_exact_test_OR = unname(fisher.test(table(tempdf$status, tempdf$PTVb))$estimate), Fishers_exact_test_P = fisher.test(table(tempdf$status, tempdf$PTVb))$p.value)
+```
+
+#Plots
+##Tumor-gender pairs
+
+```{r}
+ptvb_types = sort(gsub(".rds", "", grep("ptvb", list.files("Objects/020/PTVs/"), value = T)))
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+plan(multisession(workers = 4))
+
+future_lapply(ptvb_types, function(selptvb) {
+  pl_list_tumors = lapply(tumor_freq_data$TS, function(ts) {fun_TumorIncForestPlot_v2(tumor = strsplit(ts, "_")[[1]][1], gender = strsplit(ts, "_")[[1]][2], ptvb_type = selptvb)})
+  ggsave(filename = paste0("Plots/021/", selptvb, ".pdf"), plot = marrangeGrob(pl_list_tumors, nrow=1, ncol=1), width = 21, height = 21)
+})
+
+res1 = future_lapply(ptvb_types, function(selptvb) {
+  cox_P_HR_tumors = t(sapply(tumor_freq_data$TS, function(ts) {fun_TumorIncCoxModel_v2(tumor = strsplit(ts, "_")[[1]][1], gender = strsplit(ts, "_")[[1]][2], ptvb_type = selptvb)}))
+  cbind.data.frame(ptv_type = selptvb, cox_P_HR_tumors)
+})
+res1 = future_lapply(res1, function(x) cbind.data.frame(tumor_freq_data, x)) %>% bind_rows()
+rownames(res1) = NULL
+saveRDS(res1, file = "Res/021/tumor_incidence_ts_12_general_ptvb.rds")
+
+tblForHM = res1 %>% dplyr::select(TS, ptv_type, HR) %>% pivot_wider(id_cols = ptv_type, names_from = TS, values_from = HR) %>% as.data.frame()
+rownames(tblForHM) = tblForHM$ptv_type
+tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
+col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
+Heatmap(tblForHM, cluster_columns = F, cluster_rows = F, col = col_fun)
+Heatmap(tblForHM, col = col_fun)
+
+apply(tblForHM, 1, function(x) sum(x[!is.na(x)]>1))
+res1 %>% filter(ptv_type == "ptvb_maf104") %>% View()
+
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104")
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104", gender = "female")
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104", gender = "male")
+
+```
+
+##Tumors
+
+```{r}
+
+```
+

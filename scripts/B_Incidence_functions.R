@@ -121,7 +121,11 @@ fun_TumorIncCoxModel = function(tumor = "all", control = "nottumorous", gender =
   }
   myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
   res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
-  out = summary(res.cox)$coefficients["PTVb1",c("exp(coef)","Pr(>|z|)")]
+  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+    out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
+  } else {
+    out = c(NA, NA)
+  }
   names(out) = c("HR", "Pvalue")
   out
 }
