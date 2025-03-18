@@ -8,10 +8,7 @@ date: "2025-03-14"
 
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
-#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("readxl", "data.table", "tidyverse", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "Rfast", "hgnc", "survival", "forestmodel", "gridExtra", "ggpubr", "ComplexHeatmap")
-#Packages <- c( "pbapply", , "rvest")
-#, , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , , , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", , )
+Packages <- c("readxl", "data.table", "tidyverse", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "Rfast", "hgnc", "survival", "forestmodel", "gridExtra", "ggpubr", "ComplexHeatmap", "tidycmprsk")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
@@ -145,9 +142,49 @@ fun_TumorIncCoxModel_v2 = function(tumor = "all", control = "nottumorous", gende
 }
 
 
+#death due to tumor
+fun_TumorIncStat_v2 = function(tumor = "all", gender = "all", ptvb_type = "ptvb", ptv_burden_cat = TRUE, gpca_nb = 10, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/020/PTVs/", cutoff = 0.75) {
+  tumor_data = bind_rows(lapply(tumor, function(tmr) {
+    if(tmr == "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
+    } else if(tmr == "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
+    } else if(tmr != "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
+    } else if(tmr != "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
+    }
+  }))
+  tumor_data$death_type[tumor_data$death == T & is.na(tumor_data$death_type)] = "other"
+  tumor_data %<>% mutate(cancerCausesDeath = death_type == cancer_type)
+  m = max(tumor_data$date_of_death, na.rm = T)
+  tumor_data %<>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(m - birthdate))) %>% 
+    mutate(status = case_when(
+      death == T & cancerCausesDeath == T ~ 2,
+      death == F ~ 1,
+      death == T & cancerCausesDeath == F ~ 3
+    )) %>% 
+    transform(status = factor(status, levels = c(1,2,3)))
+  ptvb = readRDS(paste0(ptv_dir, ptvb_type, ".rds"))
+  tumor_data$PTVb = ptvb[fmatch(tumor_data$eid, names(ptvb))]
+  co = quantile(tumor_data$PTVb, cutoff)
+  if(ptv_burden_cat == T) {tumor_data$PTVb = as.factor(ifelse(tumor_data$PTVb < co, 0, 1))}
+  cuminc(Surv(time, status) ~ PTVb, data = tumor_data) %>%
+    ggcuminc() +
+    labs(x = "Days", y = paste0("Cutoff = ", co)) +
+    add_confidence_interval() +
+    add_risktable() +
+    add_pvalue()
+}
 
 
-c(Fishers_exact_test_OR = unname(fisher.test(table(tempdf$status, tempdf$PTVb))$estimate), Fishers_exact_test_P = fisher.test(table(tempdf$status, tempdf$PTVb))$p.value)
+
+
 ```
 
 #Plots
@@ -171,7 +208,12 @@ res1 = future_lapply(res1, function(x) cbind.data.frame(tumor_freq_data, x)) %>%
 rownames(res1) = NULL
 saveRDS(res1, file = "Res/021/tumor_incidence_ts_12_general_ptvb.rds")
 
-tblForHM = res1 %>% dplyr::select(TS, ptv_type, HR) %>% pivot_wider(id_cols = ptv_type, names_from = TS, values_from = HR) %>% as.data.frame()
+res1 = readRDS("Res/021/tumor_incidence_ts_12_general_ptvb.rds")
+tblForHM = res1 %>% 
+  dplyr::filter(Pvalue < 0.05) %>%
+  dplyr::select(TS, ptv_type, HR) %>% 
+  pivot_wider(id_cols = ptv_type, names_from = TS, values_from = HR) %>% 
+  as.data.frame()
 rownames(tblForHM) = tblForHM$ptv_type
 tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
 col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
@@ -181,15 +223,134 @@ Heatmap(tblForHM, col = col_fun)
 apply(tblForHM, 1, function(x) sum(x[!is.na(x)]>1))
 res1 %>% filter(ptv_type == "ptvb_maf104") %>% View()
 
-fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104")
+
 fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104", gender = "female")
 fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104", gender = "male")
 
+#Compare the outcome
+fun_TumorIncStat_v2(ptvb_type = "ptvb_maf104", gender = "female", cutoff = .85)
+fun_TumorIncStat_v2(ptvb_type = "ptvb_maf104", gender = "male", cutoff = .8) #cutoff: 8 (65%, 70%) - 0.043, 9 (75%, 80%) - 0.064
 ```
 
 ##Tumors
 
 ```{r}
+ptvb_types = sort(gsub(".rds", "", grep("ptvb", list.files("Objects/020/PTVs/"), value = T)))
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+tumors = sort(unique(tumor_freq_data$cancer_type))
+
+res2 = future_lapply(ptvb_types, function(selptvb) {
+  cox_P_HR_tumors = t(sapply(tumors, function(tm) {fun_TumorIncCoxModel_v2(tumor = tm, ptvb_type = selptvb)}))
+  cbind.data.frame(ptv_type = selptvb, cox_P_HR_tumors)
+})
+res2 = future_lapply(res2, function(x) cbind.data.frame(tumor = tumors, x)) %>% bind_rows()
+rownames(res2) = NULL
+saveRDS(res2, file = "Res/021/tumor_incidence_12_general_ptvb.rds")
+
+res2 = readRDS("Res/021/tumor_incidence_12_general_ptvb.rds")
+
+tblForHM = res2 %>% dplyr::select(tumor, ptv_type, HR) %>% pivot_wider(id_cols = ptv_type, names_from = tumor, values_from = HR) %>% as.data.frame()
+rownames(tblForHM) = tblForHM$ptv_type
+tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
+col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
+Heatmap(tblForHM, cluster_columns = F, cluster_rows = F, col = col_fun)
+Heatmap(tblForHM, col = col_fun)
+
+
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104")
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104_shet001")
+#Compare the outcome
+fun_TumorIncStat_v2(tumor = "all", ptvb_type = "ptvb_maf104")
+```
+
+#Plots II. - without Broca genes
+##Tumor-gender pairs
+
+```{r}
+ptvb_types = sort(gsub(".rds", "", grep("_woBROCA", list.files("Objects/020/PTVs/"), value = T)))
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+plan(multisession(workers = 4))
+
+future_lapply(ptvb_types, function(selptvb) {
+  pl_list_tumors = lapply(tumor_freq_data$TS, function(ts) {fun_TumorIncForestPlot_v2(tumor = strsplit(ts, "_")[[1]][1], gender = strsplit(ts, "_")[[1]][2], ptvb_type = selptvb)})
+  ggsave(filename = paste0("Plots/021/", selptvb, ".pdf"), plot = marrangeGrob(pl_list_tumors, nrow=1, ncol=1), width = 21, height = 21)
+})
+
+res1 = future_lapply(ptvb_types, function(selptvb) {
+  cox_P_HR_tumors = t(sapply(tumor_freq_data$TS, function(ts) {fun_TumorIncCoxModel_v2(tumor = strsplit(ts, "_")[[1]][1], gender = strsplit(ts, "_")[[1]][2], ptvb_type = selptvb)}))
+  cbind.data.frame(ptv_type = selptvb, cox_P_HR_tumors)
+})
+res1 = future_lapply(res1, function(x) cbind.data.frame(tumor_freq_data, x)) %>% bind_rows()
+rownames(res1) = NULL
+saveRDS(res1, file = "Res/021/tumor_incidence_ts_12_general_ptvb_woBROCA.rds")
+
+
+res1 = readRDS("Res/021/tumor_incidence_ts_12_general_ptvb_woBROCA.rds")
+tblForHM = res1 %>% 
+  dplyr::filter(Pvalue < 0.05) %>% 
+  dplyr::select(TS, ptv_type, HR) %>% 
+  pivot_wider(id_cols = ptv_type, names_from = TS, values_from = HR) %>% 
+  as.data.frame()
+rownames(tblForHM) = tblForHM$ptv_type
+tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
+col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
+Heatmap(tblForHM, cluster_columns = F, cluster_rows = F, col = col_fun)
+Heatmap(tblForHM, col = col_fun)
+
+res1 %>% filter(HR>1, Pvalue < 0.05) %>% group_by(ptv_type) %>% summarise(n = n()) %>% arrange(desc(n))
+
+apply(tblForHM, 1, function(x) sum(x[!is.na(x)]>1))
+res1 %>% filter(ptv_type == "ptvb_maf104") %>% View()
+
+
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104", gender = "female")
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104", gender = "male")
+
+#Compare the outcome
+fun_TumorIncStat_v2(ptvb_type = "ptvb_maf104", gender = "female", cutoff = .85)
+fun_TumorIncStat_v2(ptvb_type = "ptvb_maf104", gender = "male", cutoff = .8) #cutoff: 8 (65%, 70%) - 0.043, 9 (75%, 80%) - 0.064
+```
+
+##Tumors
+
+```{r}
+ptvb_types = sort(gsub(".rds", "", grep("_woBROCA", list.files("Objects/020/PTVs/"), value = T)))
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+tumors = sort(unique(tumor_freq_data$cancer_type))
+
+res2 = future_lapply(ptvb_types, function(selptvb) {
+  cox_P_HR_tumors = t(sapply(tumors, function(tm) {fun_TumorIncCoxModel_v2(tumor = tm, ptvb_type = selptvb)}))
+  cbind.data.frame(ptv_type = selptvb, cox_P_HR_tumors)
+})
+res2 = future_lapply(res2, function(x) cbind.data.frame(tumor = tumors, x)) %>% bind_rows()
+rownames(res2) = NULL
+saveRDS(res2, file = "Res/021/tumor_incidence_12_general_ptvb_woBROCA.rds")
+
+res2 = readRDS("Res/021/tumor_incidence_12_general_ptvb_woBROCA.rds")
+
+tblForHM = res2 %>% 
+  dplyr::filter(Pvalue < 0.05) %>% 
+  dplyr::select(tumor, ptv_type, HR) %>% 
+  pivot_wider(id_cols = ptv_type, names_from = tumor, values_from = HR) %>% 
+  as.data.frame()
+rownames(tblForHM) = tblForHM$ptv_type
+tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
+col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
+Heatmap(tblForHM, cluster_columns = F, cluster_rows = F, col = col_fun)
+Heatmap(tblForHM, col = col_fun)
+
+
+fun_TumorIncForestPlot_v2(ptvb_type = "ptvb_maf104_shet01_woBROCA")
+fun_TumorIncForestPlot_v2(tumor = "Leukemia", ptvb_type = "ptvb_maf104_shet01_woBROCA")
+fun_TumorIncForestPlot_v2(tumor = "Lung", ptvb_type = "ptvb_maf104_shet01_woBROCA")
+fun_TumorIncForestPlot_v2(tumor = "Thyroid", ptvb_type = "ptvb_maf104_shet01_woBROCA")
+
+#Compare the outcome
+fun_TumorIncStat_v2(tumor = "Leukemia", ptvb_type = "ptvb_maf104_shet01_woBROCA", cutoff = 0.75)
+fun_TumorIncStat_v2(tumor = "Lung", ptvb_type = "ptvb_maf104_shet01_woBROCA", cutoff = 0.75)
+fun_TumorIncStat_v2(tumor = "Thyroid", ptvb_type = "ptvb_maf104_shet01_woBROCA", cutoff = 0.75)
 
 ```
+
+
 

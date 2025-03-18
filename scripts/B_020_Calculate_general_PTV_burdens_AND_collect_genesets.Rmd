@@ -23,7 +23,7 @@ options(dplyr.summarise.inform = FALSE)
 options(future.globals.maxSize= 2147483648) #2048*1024^2 2GB/workers
 ```
 
-#PTV burden table
+#Calculate general PTV burdens
 SHET: https://www.nature.com/articles/s41588-024-01820-9#Sec34
 
 ```{r}
@@ -112,19 +112,36 @@ future_sapply(grep("ptvb", colnames(ptv_data), value = T), function(x) {
 
 
 
-
-ptvb = ptv_data$ptvb_shet001
-names(ptvb) = ptv_data$eid
-saveRDS(ptvb, file = "Objects/020/PTVs/ptvb.rds")
-
-
-
-
 ensgs_ukb_all = sort(unique(unlist(strsplit(ptv_data$ptvgenes, ","), use.names = F)))
 Table(sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf103, ","), use.names = F))) %fin% ensgs_ukb_all)
 Table(sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf104, ","), use.names = F))) %fin% ensgs_ukb_all)
 sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf104, ","), use.names = F)))[!sort(unique(unlist(strsplit(ptv_data$ptvgenes_maf104, ","), use.names = F))) %fin% ensgs_ukb_all][1:10]
 ```
+
+#Calculate general PTV burdens without Broca gene set
+
+```{r}
+ptv_data = readRDS("Objects/020/PTVs/ptv_data_250314.rds")
+broca_crp = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
+gene_match = bitr(geneID = broca_crp, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+broca_ensgs = gene_match$ENSEMBL
+
+plan(multisession(workers = 4))
+ukb_ptvb = t(future_apply(ptv_data[,14:25], 1, function(x) lengths(lapply(strsplit(x, ","), function(y) y[!y %fin% broca_ensgs]))))
+View(head(ukb_ptvb))
+colnames(ukb_ptvb) = gsub("ptvgenes", "ptvb", colnames(ukb_ptvb))
+
+future_sapply(grep("ptvb", colnames(ukb_ptvb), value = T), function(x) {
+  ptvb = ukb_ptvb[,x]
+  names(ptvb) = ptv_data$eid
+  saveRDS(ptvb, file = paste0("Objects/020/PTVs/", x, "_woBROCA.rds"))
+})
+
+
+```
+
+
+
 
 #Genesets
 ##GO
