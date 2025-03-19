@@ -430,3 +430,66 @@ print(forest)
 
 ```
 
+#Function
+```{r}
+source("C:/Users/bagil/Desktop/MyGit/ukb_tumor/scripts/B_Incidence_functions.R")
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/TIC_genes") 
+#tlist_dataset = read_rds("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/tumorous_female.rds")
+#load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/Melanoma_Inhibit_immunity")
+
+geneset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/"
+gender = "female"
+#genes = unlist(strsplit(Melanoma_Inhibit_immunity$genes, ","))
+#geneset = unique(grep("^ENSG", genes, value = T))
+tumors = "Melanoma"
+r = "Promote_immunity"
+
+#Cox model
+fun_TumorSurvCoxDS(tumor = tumors, gender = gender, geneset = geneset, ptv_burden_cat = T, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+
+#Forest plot
+out_dir = "plots/Survival/101_forest/"
+pdf_width = 10  
+pdf_height = 12
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_forest_", ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  genesdf = bind_rows(lapply(t, function(tmr) {
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all") {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }
+  }))
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T))  
+  fig = fun_TumorSurvForestDS(tumor = t, gender = gender, geneset = geneset, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/", )
+  print(fig)
+})
+dev.off()
+
+#KM analysis
+out_dir = "plots/Survival/101_KM/"
+pdf_width = 15  
+pdf_height = 10
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_KM_", t, ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  genesdf = bind_rows(lapply(t, function(tmr) {
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all") {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }
+  }))
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorSurvPlotDS(tumor = t, gender = gender, geneset = geneset, ptv_burden_cat = T, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+```
+

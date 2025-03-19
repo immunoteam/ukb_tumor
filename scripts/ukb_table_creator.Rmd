@@ -5,7 +5,7 @@ date: "2024-01-16"
 output: html_document
 ---
 
-d#Libaries
+#Libaries
 ```{r}
 library(ggpubr)
 library(fastmatch)
@@ -321,16 +321,19 @@ load("C:/Users/bagil/Desktop/ukb/objects/cancer_data_1")
 
 #ICD mapping
 ```{r}
-icd_oral=data.frame(ICD10 = paste0("C0", 1:6), cancer_type = "Oral")
+icd_oral=data.frame(ICD10 = c(paste0("C0", 1:9), paste0("C", 10:14)), cancer_type = "Lip,Oral_Cavity,Pharynx")
+icd_colon = data.frame(ICD10 = paste0("C", 18:19), cancer_type = "Colon")
 icd_rectum=data.frame(ICD10= paste0("C", 19:21), cancer_type= "Rectum")
+icd_other_D_organs = data.frame(ICD10 = c(paste0("C", 23:24), paste0("C", 26)), cancer_type = "Other_Digestive_Organ")
+icd_other_r_organs = data.frame(ICD10 = c("C30", "C21", "C33", paste0("C", 37:39)), cancer_type = "Other_Respiratory_and_Intrathoracic_Organs")
 icd_kidney = data.frame(ICD10=paste0("C", 64:65), cancer_type= "Kidney")
 icd_non_h_lymph = data.frame(ICD10 = paste0("C", 82:86), cancer_type = "Non-Hodgkin lymphoma")
 icd_leukemia = data.frame(ICD10 = paste0("C", 91:95), cancer_type = "Leukemia")
 icd_lung = data.frame(ICD10 = paste0("C", 33:34), cancer_type = "Lung")
 icd_brain = data.frame(ICD10 = paste0("C", 70:72), cancer_type = "Brain/CNS")
 
-icd_only_datas=data.frame(ICD10 =c("C32", "C15", "C16","C18","C22", "C25", "C61", "C62", "C67", "C50", "C53", "C54", "C56", "C81", "C45", "C43","C73", "C96", "C88", "C90" ),
-                          cancer_type = c("Larynx","Esophagus", "Stomach", "Colon", "Liver", "Pancreas", "Prostate", "Testis", "Bladder","Breast",  "Cervix", "Endometrium", "Ovary", "Hodgkin lymphoma", "Mesothelioma", "Melanoma", "Thyroid", "Non-Hodgkin lymphoma", "Multiple myeloma", "Multiple myeloma"))
+icd_only_datas=data.frame(ICD10 =c("C32", "C15", "C16", "C17", "C20", "C21", "C22", "C25", "C34", "C61", "C62", "C67", "C50", "C53", "C54", "C56", "C81", "C45", "C43","C73", "C96", "C88", "C90" ),
+                          cancer_type = c("Larynx", "Esophagus", "Stomach", "Small_Intestine", "Rectum", "Anus","Liver", "Pancreas", "Lung", "Prostate", "Testis", "Bladder","Breast",  "Cervix", "Endometrium", "Ovary", "Hodgkin lymphoma", "Mesothelioma", "Melanoma", "Thyroid", "Non-Hodgkin lymphoma", "Multiple myeloma", "Multiple myeloma"))
 icd_mapping = rbind(icd_only_datas, icd_brain,icd_lung, icd_leukemia, icd_non_h_lymph, icd_kidney, icd_rectum,icd_oral)
 rm(icd_brain, icd_kidney, icd_only_datas, icd_lung, icd_leukemia, icd_non_h_lymph, icd_rectum, icd_oral)
 
@@ -347,6 +350,16 @@ save(icd_mapping, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_map
 
 
 ```
+
+
+```{r}
+TCGA_ICD10 = read_xlsx("C:/Users/bagil/Desktop/ukb/TCGA_ICD10.xlsx", col_names = T)
+
+
+
+
+```
+
 
 
 #UKB data + cancer data
@@ -1734,5 +1747,36 @@ save(tumorous_male, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor
 
 ```
 
+#TCGA histology
+```{r}
+
+histologydf = read_xlsx("C:/Users/bagil/Desktop/ukb/sitetype.icdo3.d20220429.xlsx")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/icd_mapping")
+load("C:/Users/bagil/Desktop/ukb/objects/cancer_data_1")
+icd_df = read_xlsx("C:/Users/bagil/Desktop/ukb/rawdata/icd10_codes.xlsx")
+tumor_hist = cancer_data %>% 
+  select(eid, ICD10, histology, ICD_hist)
+icd_df = icd_df %>% 
+  select(1:3) 
+icd_df$`ICD-10 4th Edition - All C Codes are Malignant Neoplasms` = gsub("\\.", "", icd_df$`ICD-10 4th Edition - All C Codes are Malignant Neoplasms`)
+
+
+tumor_hist$hist_short = substr(tumor_hist$histology, 1, 3)
+tumor_hist$hist_type = histologydf$`Histology Description`[fmatch(tumor_hist$hist_short, histologydf$Histology)]
+
+histologydf$`Histology/Behavior` = strsplit(histologydf$`Histology/Behavior`, "/")
+histologydf$`Histology/Behavior` = sapply(histologydf$`Histology/Behavior`, function(x) x[1])
+tumor_hist$hist_behavior = histologydf$`Histology/Behavior Description`[fmatch(tumor_hist$histology, histologydf$`Histology/Behavior`)]
+
+tumor_hist$TCGAtumor_type = icd_df$`Cancer Waiting Times Site specific group`[fmatch(tumor_hist$ICD10, icd_df$`ICD-10 4th Edition - All C Codes are Malignant Neoplasms`)]
+tumor_hist$TCGA_tumors = paste(tumor_hist$TCGAtumor_type, tumor_hist$hist_behavior, sep = "_")
+tumor_hist$TCGA_tumors = gsub(" ", "_", tumor_hist$TCGA_tumors)
+save(tumor_hist, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_hist_df")
+
+
+
+
+
+```
 
 

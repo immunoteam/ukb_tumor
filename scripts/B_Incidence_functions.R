@@ -297,8 +297,15 @@ fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  survdf = survdf %>% 
-    select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
+  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
+  } else {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  }
   case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
   if(gender == "all") {
     tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
@@ -344,8 +351,15 @@ fun_TumorSurvForestOS = function(tumor = "all", gender = "all", geneset = c("ENS
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  survdf = survdf %>% 
-    select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
+  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
+  } else {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  }
   dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
   alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
   if(gender == "all") {
@@ -441,8 +455,15 @@ fun_TumorSurvCoxDS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  survdf = survdf %>% 
-    dplyr::select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
+  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
+  } else {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  }
   case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
   if(gender == "all") {
     tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
@@ -488,8 +509,15 @@ fun_TumorSurvForestDS = function(tumor = "all", gender = "all", geneset = c("ENS
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  survdf = survdf %>% 
-    dplyr::select(eid, surv_time, surv_event, PTVb, all_of(sel_gpcas))
+  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
+  } else {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  }
   dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
   alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
   if(gender == "all") {

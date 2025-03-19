@@ -1,0 +1,556 @@
+---
+title: "L_106_TIC_analysis"
+author: "Bagi Laura"
+date: "2025-03-05"
+output: html_document
+---
+
+#Libraries
+```{r}
+library(ggpubr)
+library(fastmatch)
+library(readxl)
+library(forcats)
+library(survival)
+library(survminer)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(caret)
+library(tidyverse)
+library(future.apply)
+library(magrittr)
+library(tidycmprsk)
+library(ggsurvfit)
+library(patchwork)
+library(cowplot)
+library(gt)
+library(gtsummary)
+library(devtools)
+library(pbapply)
+library(broom)
+library(pheatmap)
+library(RColorBrewer)
+library(circlize)
+library(dendsort)
+library(forestmodel)
+library(purrr)
+options(dplyr.summarise.inform = F)
+
+```
+
+#Loads
+```{r}
+#Functions
+source("C:/Users/bagil/Desktop/MyGit/ukb_tumor/scripts/B_Incidence_functions.R")
+
+```
+
+#Survival analysis
+##DS
+```{r}
+
+geneset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/"
+#TICr_genes = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/.rds")
+#genes = unlist(strsplit(TICr_genes$genes, ","))
+#geneset = unique(grep("^ENSG", genes, value = T))
+gender = "all"
+tumors = "all"
+r = "Promote_tumorigenesis"
+
+#Melanoma promote tumorgenesi, immuniti: error
+
+#Cox model
+fun_TumorSurvCoxDS(tumor = tumors, gender = gender, geneset = geneset, ptv_burden_cat = T, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+
+#Forest plot
+i = 0
+out_dir = "plots/TIC/Survival/DS/"
+pdf_width = 10  
+pdf_height = 12
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_forest_", r, ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = bind_rows(lapply(tumors, function(tmr) {
+    file_path = paste0(geneset_dir, tmr, "_", r, ".rds")
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all" & file.exists(file_path)) {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }else if(tmr != "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else {
+      (print("No table.")) 
+      gene_data = NULL
+    }
+  }))
+  genesdf$Cancer_Type = gsub(" Cancer", "", genesdf$Cancer_Type)
+  genesdf = genesdf %>% filter(Cancer_Type == t)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorSurvForestDS(tumor = t, gender = gender, geneset = geneset, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+
+#KM analysis
+out_dir = "plots/TIC/Survival/DS/"
+pdf_width = 15  
+pdf_height = 10
+i = 0
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_KM_", r, ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+   genesdf = bind_rows(lapply(tumors, function(tmr) {
+    file_path = paste0(geneset_dir, tmr, "_", r, ".rds")
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all" & file.exists(file_path)) {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }else if(tmr != "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else {
+      (print("No table.")) 
+      gene_data = NULL
+    }
+  }))
+  genesdf$Cancer_Type = gsub(" Cancer", "", genesdf$Cancer_Type)
+  genesdf = genesdf %>% filter(Cancer_Type == t)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorSurvPlotDS(tumor = t, gender = gender, geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+
+
+```
+
+###All tumor, relationship
+```{r}
+
+
+
+tumors = c("Cervix", "Melanoma", "Colon", "Endometrium", "BrainCNS", "Prostate", "Liver", "NonHodgkinlymphoma", "Bladder", "Esophagus", "Kidney", "Leukemia", "Lung")
+
+#Females Promote tumorigenesis: "Hodgkinlymphoma", "Cervix", "Melanoma", "Larynx", "Mesothelioma",
+#        Promote immunity: "Thyroid", Oral, Larynx, Mesothelioma
+#        Inhibit immunity: "Thyroid", "Oral", "Larynx", "Mesothelioma"
+
+#Males promote tumorigenesis: "Hodgkinlymphoma", "Testis", "Thyroid", "Breast"
+#      Promote immunity: "Hodgkinlymphoma", "Testis", "Larynx", "Breast"
+#      Inhibit immunity: "Hodgkinlymphoma", "Testis", "Larynx", "Breast"
+#All gender: Promote immunity: Testis
+#tumors = setdiff(tumors, list("Hodgkinlymphoma", "Cervix", "Melanoma", "Larynx", "Mesothelioma"))  
+r = "Inhibit tumorigenesis"
+
+#Cox model
+fun_TumorSurvCoxDS(tumor = tumors, gender = gender, geneset = geneset, ptv_burden_cat = T, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+
+#Forest plot
+i = 0
+forestplot = unlist(pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+  genesdf = genesdf %>% filter(Relation_To_Immunity_Or_Cancer == r)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  if (t %in% c("Endometrium", "Cervix")) {
+  fig_female = fun_TumorSurvForestDS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_female))
+  } else if (t %in% c("Testis", "Prostate")) {
+  fig_male = fun_TumorSurvForestDS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_male))
+  } else {
+    fig_female = fun_TumorSurvForestDS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_male = fun_TumorSurvForestDS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_both = fun_TumorSurvForestDS(tumor = t, gender = "all", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    return(list(fig_female, fig_male, fig_both))
+  }
+}), recursive = F)
+
+
+#KM analysis
+i = 0
+
+kmplot = unlist(pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+  genesdf = genesdf %>% filter(Relation_To_Immunity_Or_Cancer == r)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  if (t %in% c("Endometrium", "Cervix")) {
+  fig_female = fun_TumorSurvPlotDS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_female))
+  } else if (t %in% c("Testis", "Prostate")) {
+  fig_male = fun_TumorSurvPlotDS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_male))
+  } else {
+    fig_female = fun_TumorSurvPlotDS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_male = fun_TumorSurvPlotDS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_both = fun_TumorSurvPlotDS(tumor = t, gender = "all", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    return(list(fig_female, fig_male, fig_both))
+  }
+}), recursive = F)
+
+
+#Save as pdf
+out_dir = "plots/TIC/Survival/DS/"
+pdf_width = 10  
+pdf_height = 12
+pdf_filename = paste0(out_dir, "DSsurv_", r,".pdf")
+
+pdf(pdf_filename, onefile = TRUE, width = 21, height = 10.5)
+for (i in seq_along(kmplot)) {
+  surv_plot = kmplot[[i]]
+  forest_plot = forestplot[[i]]
+  if (!is.null(surv_plot) && !is.null(forest_plot)) {
+    grid.arrange(surv_plot, forest_plot, ncol = 2)
+  }
+}
+dev.off()
+
+```
+
+
+##OS
+```{r}
+geneset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/"
+TICr_genes = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+tic_f = r
+#genes = unlist(strsplit(TICr_genes$genes, ","))
+#geneset = unique(grep("^ENSG", genes, value = T))
+gender = "male"
+tumors = "Melanoma"
+r = "Inhibit_immunity"
+
+#Melanoma promote tumorgenesi, immuniti: error
+
+#Cox model
+fun_TumorSurvCoxOS(tumor = tumors, gender = gender, geneset = geneset, ptv_burden_cat = T, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+
+#Forest plot
+i = 0
+out_dir = "plots/TIC/Survival/OS/"
+pdf_width = 10  
+pdf_height = 12
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_forest_", r, ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = bind_rows(lapply(tumors, function(tmr) {
+    file_path = paste0(geneset_dir, tmr, "_", r, ".rds")
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all" & file.exists(file_path)) {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }else if(tmr != "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else {
+      (print("No table.")) 
+      gene_data = NULL
+    }
+  }))
+  genesdf$Cancer_Type = gsub(" Cancer", "", genesdf$Cancer_Type)
+  genesdf = genesdf %>% filter(Cancer_Type == t)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorSurvForestOS(tumor = t, gender = gender, geneset = geneset, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+
+#KM analysis
+out_dir = "plots/TIC/Survival/OS/"
+pdf_width = 15  
+pdf_height = 10
+i = 0
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_KM_", r, ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+   genesdf = bind_rows(lapply(tumors, function(tmr) {
+    file_path = paste0(geneset_dir, tmr, "_", r, ".rds")
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all" & file.exists(file_path)) {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }else if(tmr != "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else {
+      (print("No table.")) 
+      gene_data = NULL
+    }
+  }))
+  genesdf$Cancer_Type = gsub(" Cancer", "", genesdf$Cancer_Type)
+  genesdf = genesdf %>% filter(Cancer_Type == t)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorSurvPlotOS(tumor = t, gender = gender, geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+```
+
+###All tumor, relationship
+```{r}
+
+
+tumors = c("Cervix", "Melanoma", "Colon", "Endometrium", "BrainCNS", "Prostate", "Liver", "NonHodgkinlymphoma", "Bladder", "Esophagus", "Kidney", "Leukemia", "Lung")
+#Females Promote tumorigenesis: "Hodgkinlymphoma", "Cervix", "Melanoma", "Larynx", "Mesothelioma",
+#        Promote immunity: "Thyroid", Oral, Larynx, Mesothelioma
+#        Inhibit immunity: "Thyroid", "Oral", "Larynx", "Mesothelioma"
+
+#Males promote tumorigenesis: "Hodgkinlymphoma", "Testis", "Thyroid", "Breast"
+#      Promote immunity: "Hodgkinlymphoma", "Testis", "Larynx", "Breast"
+#      Inhibit immunity: "Hodgkinlymphoma", "Testis", "Larynx", "Breast"
+#All gender: Promote immunity: Testis
+
+#tumors = setdiff(tumors, list("Hodgkinlymphoma", "Testis", "Larynx", "Breast"))  
+r = "Inhibit tumorigenesis"
+
+#Cox model
+fun_TumorSurvCoxOS(tumor = tumors, gender = gender, geneset = geneset, ptv_burden_cat = T, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+
+#Forest plot
+i = 0
+forestplot = unlist(pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+  genesdf = genesdf %>% filter(Relation_To_Immunity_Or_Cancer == r)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  if (t %in% c("Endometrium", "Cervix")) {
+  fig_female = fun_TumorSurvForestOS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_female))
+  } else if (t %in% c("Testis", "Prostate")) {
+  fig_male = fun_TumorSurvForestOS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_male))
+  } else {
+    fig_female = fun_TumorSurvForestOS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_male = fun_TumorSurvForestOS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_both = fun_TumorSurvForestOS(tumor = t, gender = "all", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    return(list(fig_female, fig_male, fig_both))
+  }
+}), recursive = F)
+
+
+#KM analysis
+i = 0
+
+kmplot = unlist(pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+  genesdf = genesdf %>% filter(Relation_To_Immunity_Or_Cancer == r)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  if (t %in% c("Endometrium", "Cervix")) {
+  fig_female = fun_TumorSurvPlotOS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_female))
+  } else if (t %in% c("Testis", "Prostate")) {
+  fig_male = fun_TumorSurvPlotOS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  return(list(fig_male))
+  } else {
+    fig_female = fun_TumorSurvPlotOS(tumor = t, gender = "female", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_male = fun_TumorSurvPlotOS(tumor = t, gender = "male", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    fig_both = fun_TumorSurvPlotOS(tumor = t, gender = "all", geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+    return(list(fig_female, fig_male, fig_both))
+  }
+}), recursive = F)
+
+
+#Save as pdf
+out_dir = "plots/TIC/Survival/OS/"
+pdf_filename = paste0(out_dir, "OSsurv_", r,".pdf")
+
+pdf(pdf_filename, onefile = TRUE, width = 21, height = 10.5)
+for (i in seq_along(kmplot)) {
+  surv_plot = kmplot[[i]]
+  forest_plot = forestplot[[i]]
+  if (!is.null(surv_plot) && !is.null(forest_plot)) {
+    grid.arrange(surv_plot, forest_plot, ncol = 2)
+  }
+}
+dev.off()
+
+
+
+
+```
+
+#Fishtest
+```{r}
+
+r = "Promote immunity"
+genesdf = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+genesdf = genesdf %>% filter(Relation_To_Immunity_Or_Cancer == r)
+genes = unlist(strsplit(genesdf$genes, ","))
+geneset = unique(grep("^ENSG", genes, value = T)) 
+
+res_fishtest = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/res_fishtest_104.rds")
+res_fishtest %>% filter(ENSEMBL %in% geneset) %>% filter(category %in% c("Melanoma", )) %>% View()
+
+
+```
+
+
+#Incidence
+```{r}
+
+geneset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/"
+#TICr_genes = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/.rds")
+#genes = unlist(strsplit(TICr_genes$genes, ","))
+#geneset = unique(grep("^ENSG", genes, value = T))
+gender = "all"
+tumors = c("Melanoma", "Breast", "Lung", "Liver")
+r = "Promote_tumorigenesis"
+
+#Forest plot
+i = 0
+out_dir = "plots/TIC/Incidence/"
+pdf_width = 10  
+pdf_height = 12
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_forest_", r, ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = bind_rows(lapply(tumors, function(tmr) {
+    file_path = paste0(geneset_dir, tmr, "_", r, ".rds")
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all" & file.exists(file_path)) {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }else if(tmr != "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else {
+      (print("No table.")) 
+      gene_data = NULL
+    }
+  }))
+  genesdf$Cancer_Type = gsub(" Cancer", "", genesdf$Cancer_Type)
+  genesdf = genesdf %>% filter(Cancer_Type == t)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorIncForestPlot(tumor = t, control = "nottumorous", gender = gender, geneset = geneset, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/", ptv_burden_cat = T)
+  print(fig)
+})
+dev.off()
+
+#KM plot
+i = 0
+out_dir = "plots/TIC/Incidence/"
+pdf_width = 10  
+pdf_height = 12
+
+pdf_filename = paste0(out_dir, "TIC_", gender, "_KM_", r, ".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = bind_rows(lapply(tumors, function(tmr) {
+    file_path = paste0(geneset_dir, tmr, "_", r, ".rds")
+    if(tmr == "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else if(tmr != "all" & r != "all" & file.exists(file_path)) {
+      gene_data = readRDS(paste0(geneset_dir, tmr, "_", r, ".rds"))
+    }else if(tmr != "all" & r == "all") {
+      gene_data = readRDS(paste0(geneset_dir, "tic_comm.rds"))
+    } else {
+      (print("No table.")) 
+      gene_data = NULL
+    }
+  }))
+  genesdf$Cancer_Type = gsub(" Cancer", "", genesdf$Cancer_Type)
+  genesdf = genesdf %>% filter(Cancer_Type == t)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorIncStat(tumor = t, gender = gender, geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+```
+
+##All tumors, relation
+```{r}
+
+gender = "female"
+tumors = tumorous_all %>% 
+  filter(sex == gender)
+tumors = unique(tumors$cancer_type)
+#Females Promote tumorigenesis: "Larynx", "Mesothelioma",
+#        Promote immunity: "Thyroid", Oral, Larynx, Mesothelioma
+#        Inhibit immunity: "Thyroid", "Oral", "Larynx", "Mesothelioma"
+
+#Males promote tumorigenesis: "Hodgkinlymphoma", "Testis", "Thyroid", "Breast"
+#      Promote immunity: "Hodgkinlymphoma", "Testis", "Larynx", "Breast"
+#      Inhibit immunity: "Hodgkinlymphoma", "Testis", "Larynx", "Breast"
+#All gender: Promote immunity: Testis
+
+tumors = setdiff(tumors, list("Larynx", "Mesothelioma"))  
+r = "Promote immunity"
+
+
+#Forest plot
+i = 0
+out_dir = "plots/TIC/Incidence/"
+pdf_width = 10  
+pdf_height = 12
+
+pdf_filename = paste0(out_dir, "TIC_allgene_", gender, "_forest_", r, "_all",".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+  genesdf = genesdf %>% filter(Relation_To_Immunity_Or_Cancer == r)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorIncForestPlot(tumor = t, gender = gender, geneset = geneset, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+#KM analysis
+out_dir = "plots/TIC/Incidence/"
+pdf_width = 15  
+pdf_height = 10
+i = 0
+
+pdf_filename = paste0(out_dir, "TIC_all", gender, "_KM_", r, "_all",".pdf")
+pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+pblapply(tumors, FUN = function(t){
+  i=i+1
+  .GlobalEnv$i = i
+  genesdf = readRDS("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
+  genesdf = genesdf %>% filter(Relation_To_Immunity_Or_Cancer == r)
+  genes = unlist(strsplit(genesdf$genes, ","))
+  geneset = unique(grep("^ENSG", genes, value = T)) 
+  fig = fun_TumorIncStat(tumor = t, gender = gender, geneset = geneset, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+})
+dev.off()
+
+
+```
+

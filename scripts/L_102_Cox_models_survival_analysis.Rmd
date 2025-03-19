@@ -335,5 +335,47 @@ melanoma = tempdfU %>%
 
 ```
 
+#Functions
+```{r}
+source("C:/Users/bagil/Desktop/MyGit/ukb_tumor/scripts/B_Incidence_functions.R")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/TIC_genes") 
+tlist_dataset = read_rds("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/tumorous_female.rds")
+load("C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/TIC_genes")
+
+gender = "male"
+geneset = TIC_genes
+tumors = "Melanoma"
+
+#Cox model
+fun_TumorSurvCoxOS(tumor = tumors, gender = gender, geneset = geneset, ptv_burden_cat = T, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+
+#Forest plot
+out_dir = "plots/Survival/102_forest/"
+pdf_width = 10  
+pdf_height = 12
+
+pblapply(tumors, FUN = function(t){  
+  pdf_filename = paste0(out_dir, "TIC_", gender, "_forest_", t, ".pdf")
+  pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+  fig = fun_TumorSurvForestOS(tumor = t, gender = gender, geneset = geneset, gpca_nb = 10, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+  dev.off()
+})
+
+#KM analysis
+out_dir = "plots/Survival/102_KM/"
+pdf_width = 15  
+pdf_height = 10
+
+pblapply(tumors, FUN = function(t){  
+  pdf_filename = paste0(out_dir, "TIC_", gender, "_KM_", t, ".pdf")
+  pdf(pdf_filename, onefile = T, width = pdf_width, height = pdf_height)
+  fig = fun_TumorSurvPlotOS(tumor = t, gender = gender, geneset = geneset, ptv_burden_cat = T, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/")
+  print(fig)
+  dev.off()
+})
+
+
+```
 
 

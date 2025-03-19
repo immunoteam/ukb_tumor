@@ -61,22 +61,24 @@ tic_comm = TICCom %>%
   mutate(gene_pairs = paste(Gene1Name, Gene2Name, sep = ",")) %>% 
   mutate(ENSMB = paste(Gene1Id, Gene2Id, sep = ",")) %>% 
   select(Cancer_Type, Relation_To_Immunity_Or_Cancer, cell_type, genes, gene_pairs, ENSMB)
+saveRDS(tic_comm, "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/tic_comm.rds")
 ticc_codes = data.frame(
     ENSMB = c(TICCom$Gene1Id, TICCom$Gene2Id),
     Symbol = c(TICCom$Gene1Name, TICCom$Gene2Name)
   )
 ticc_codes = unique(ticc_codes)
 
+tic_comm$Cancer_Type = gsub(" Cancer", "", tic_comm$Cancer_Type)
 tumor_relation_list = split(tic_comm, list(tic_comm$Cancer_Type, tic_comm$Relation_To_Immunity_Or_Cancer), drop = TRUE)
 out_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/"
 
-lapply(names(tumor_relation_list), function(x) {
+pblapply(names(tumor_relation_list), function(x) {
   obj_name = gsub("[ .]", "_", x)
   filtering_df = tumor_relation_list[[x]]
   if (nrow(filtering_df) >= 10){
     assign(obj_name, filtering_df, envir = .GlobalEnv)
     out_path = file.path(out_dir, paste0(obj_name))
-    save(list = obj_name, file = out_path)
+    saveRDS(filtering_df, file = paste0(out_path, ".rds"))
   }
 })
 
@@ -129,7 +131,7 @@ nottumorous_all = nottumorous_all %>%
 #Gene list
 genes = unlist(strsplit(tic_comm$genes, ","))
 TIC_genes = unique(grep("^ENSG", genes, value = T))
-save(TIC_genes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/TIC_genes")
+saveRDS(TIC_genes, file = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/tumor_relation_dfs/TIc_genes.rds")
 
 #For tumors
 #Function
