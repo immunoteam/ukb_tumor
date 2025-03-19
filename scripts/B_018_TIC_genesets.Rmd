@@ -4,6 +4,8 @@ output: html_document
 date: "2025-02-26"
 ---
 
+#Setup
+
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
 Packages <- c("readxl", "data.table", "tidyverse", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "Rfast", "hgnc", "gridExtra", "ggpubr", "ComplexHeatmap")
@@ -13,6 +15,8 @@ options(dplyr.summarise.inform = FALSE)
 
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
 ```
+
+#Dataset
 
 ```{r}
 tic_data = readRDS("Objects/018/tic_comm.rds")
@@ -26,6 +30,7 @@ ensg_unique = sort(unique(unlist(tic_ensgs, use.names = F)))
 gene_match = bitr(geneID = ensg_unique, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = "org.Hs.eg.db")
 tic_symbols = lapply(tic_ensgs, function(x) gene_match$SYMBOL[fmatch(x, gene_match$ENSEMBL)])
 
+save(tic_ensgs, tic_symbols, file = "Objects/018/tic_genesets")
 rm(gene_match, tic_data, ensg_unique, relations)
 ```
 
@@ -48,23 +53,55 @@ res1 = future_lapply(res1, function(x) cbind.data.frame(tumor_freq_data, x)) %>%
 rownames(res1) = NULL
 saveRDS(res1, file = "Res/018/tumor_incidence_ts_4_relations.rds")
 
-tblForHM = res1 %>% dplyr::select(TS, relation_type, HR) %>% pivot_wider(id_cols = relation_type, names_from = TS, values_from = HR) %>% as.data.frame()
+
+```
+
+##Plots
+
+```{r}
+res1 = readRDS("Res/018/tumor_incidence_ts_4_relations.rds")
+
+tblForHM = res1 %>% 
+  dplyr::select(TS, relation_type, HR) %>% 
+  pivot_wider(id_cols = relation_type, names_from = TS, values_from = HR) %>% 
+  as.data.frame()
 rownames(tblForHM) = tblForHM$relation_type
 tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
 col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
-Heatmap(tblForHM, cluster_columns = F, cluster_rows = F, col = col_fun)
-Heatmap(tblForHM, col = col_fun)
+
+png(filename = "Plots/018/tumor_incidence_ts_4_relations.png", width = 60, height = 30, units = "cm", res = 300)
+ht = Heatmap(tblForHM, col = col_fun)
+draw(ht)
+dev.off()
+
+#Only significant hits
+tblForHM = res1 %>% 
+  dplyr::filter(Pvalue < 0.05) %>% 
+  dplyr::select(TS, relation_type, HR) %>% 
+  pivot_wider(id_cols = relation_type, names_from = TS, values_from = HR) %>% 
+  as.data.frame()
+rownames(tblForHM) = tblForHM$relation_type
+tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
+col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
+
+png(filename = "Plots/018/tumor_incidence_ts_4_relations_SIGN.png", width = 30, height = 15, units = "cm", res = 300)
+ht = Heatmap(tblForHM, col = col_fun, cluster_columns = F, cluster_rows = F)
+draw(ht)
+dev.off()
 
 res1 %>% filter(relation_type == "Promote_immunity", HR > 1) %>% pull(TS)
 
+load("Objects/018/tic_genesets")
+fun_TumorIncForestPlot(tumor = "Thyroid", geneset = tic_ensgs[["Promote_immunity"]]) #both gender
 fun_TumorIncForestPlot(tumor = "Thyroid", geneset = c(tic_ensgs[["Promote_immunity"]], tic_ensgs[["Inhibit_tumorigenesis"]]))
 fun_TumorIncStat(tumor = "Thyroid", geneset = c(tic_ensgs[["Promote_immunity"]], tic_ensgs[["Inhibit_tumorigenesis"]]))
+
 ```
 
 #In separate tumors
 
 ```{r}
-
+load("Objects/018/tic_genesets")
 tumors = sort(unique(tumor_freq_data$cancer_type))
 res2 = future_lapply(names(tic_ensgs), function(relation) {
   cox_P_HR_tumors = t(sapply(tumors, function(tm) {fun_TumorIncCoxModel(tumor = tm, geneset = tic_ensgs[[relation]])}))
@@ -74,13 +111,23 @@ res2 = future_lapply(res2, function(x) cbind.data.frame(tumor = tumors, x)) %>% 
 rownames(res2) = NULL
 saveRDS(res2, file = "Res/018/tumor_incidence_tumors_4_relations.rds")
 
+res2 = readRDS("Res/018/tumor_incidence_tumors_4_relations.rds")
 
-tblForHM = res2 %>% dplyr::select(tumor, relation_type, HR) %>% pivot_wider(id_cols = relation_type, names_from = tumor, values_from = HR) %>% as.data.frame()
+tblForHM = res2 %>% 
+  dplyr::select(tumor, relation_type, HR) %>% 
+  pivot_wider(id_cols = relation_type, names_from = tumor, values_from = HR) %>% 
+  as.data.frame()
 rownames(tblForHM) = tblForHM$relation_type
 tblForHM = as.matrix(tblForHM[,2:ncol(tblForHM)])
 col_fun = circlize::colorRamp2(c(min(tblForHM, na.rm = T), 1, max(tblForHM, na.rm = T)), c("green", "white", "red"))
-Heatmap(tblForHM, cluster_columns = F, cluster_rows = F, col = col_fun)
-Heatmap(tblForHM, col = col_fun)
+
+png(filename = "Plots/018/tumor_incidence_4_relations.png", width = 60, height = 30, units = "cm", res = 300)
+ht = Heatmap(tblForHM, col = col_fun, cluster_rows = T, cluster_columns = T)
+draw(ht)
+dev.off()
+
+
+
 
 ```
 

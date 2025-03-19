@@ -283,14 +283,18 @@ FRANCOensgs = unlist(strsplit(res$genesENS[res$ptv_type == "55_FRANCO_BLOOD_SANO
 FRANCOsymbols = unlist(strsplit(res$genesHugo[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";"))
 
 res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
-res_fishtest %>% filter(SYMBOL %in% FRANCOsymbols) %>% filter(category %in% c("Melanoma", "Lung", "Bladder", "Kidney", "Brain", "Ovary", "Pancreas")) %>% View()
+res_fishtest %>% filter(SYMBOL %in% FRANCOsymbols) %>% filter(category %in% c("Lung")) %>% View()
 
 fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
 fun_TumorIncFishTest(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
 fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
 fun_TumorIncStat(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
-fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
+fun_TumorSurvPlotDS(tumor = "Lung", gender = "female", geneset = FRANCOensgs)
 fun_TumorSurvPlotOS(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
+
+ggarrange(plotlist = list(fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = FRANCOensgs), fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = FRANCOensgs)), ncol = 2)
+ggsave("Plots/017/FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_Lung_Male_Incidence_DSS_Survival.jpg", width = 50, height = 25, units = "cm", dpi = 300)
+
 
 res_MISS1gene = cbind.data.frame(SYMBOL = FRANCOsymbols, ENSG = FRANCOensgs, t(future_sapply(FRANCOensgs, function(ensg) {
   g = dplyr::setdiff(FRANCOensgs, ensg)
@@ -319,7 +323,7 @@ just tumor incidence
 ```{r}
 fun_TumorIncCoxModel(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)
 fun_TumorIncFishTest(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)
-fun_TumorIncForestPlot(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)
+fun_TumorIncForestPlot(tumor = "Bladder", gender = "female", geneset = FRANCOensgs)
 fun_TumorIncStat(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)
 fun_TumorSurvPlotDS(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)
 fun_TumorSurvPlotOS(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)

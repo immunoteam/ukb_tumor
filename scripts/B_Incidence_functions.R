@@ -1,4 +1,4 @@
-Packages <- c("tidyverse", "data.table", "Rfast", "magrittr", "fastmatch", "survival", "tidycmprsk", "ggsurvfit", "cowplot", "gtsummary", "forestmodel")
+Packages <- c("tidyverse", "data.table", "Rfast", "magrittr", "fastmatch", "survival", "tidycmprsk", "ggsurvfit", "cowplot", "gtsummary", "forestmodel", "circlize")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
@@ -503,7 +503,29 @@ fun_TumorSurvForestDS = function(tumor = "all", gender = "all", geneset = c("ENS
   fm$plot + labs(title = tt)
 }
 
-
+#Draw heatmap with HR and P-values
+fun_hm = function(restbl, x_category = "TS", y_category = "ptv_type", color_var = "HR", text_var = "Pvalue", text_var_cutoff = 0.1, col_clustering = T, row_clustering = T) {
+  colorDataHM = restbl %>% select(all_of(x_category), all_of(y_category), all_of(color_var)) %>% pivot_wider(id_cols = all_of(y_category), names_from = all_of(x_category), values_from = all_of(color_var))
+  rn = colorDataHM %>% pull(all_of(y_category))
+  colorDataHM = as.matrix(colorDataHM[,2:ncol(colorDataHM)])
+  rownames(colorDataHM) = rn
+  textDataHM = restbl %>% select(all_of(x_category), all_of(y_category), all_of(text_var)) %>% pivot_wider(id_cols = all_of(y_category), names_from = all_of(x_category), values_from = all_of(text_var))
+  rn = textDataHM %>% pull(all_of(y_category))
+  textDataHM = as.matrix(textDataHM[,2:ncol(textDataHM)])
+  rownames(textDataHM) = rn
+  textDataHM[textDataHM > text_var_cutoff] = NA
+  Heatmap(matrix = colorDataHM, row_names_gp = gpar(fontsize = 6), 
+          name = "HR", 
+          na_col = "gray",
+          col = colorRamp2(c(0, 1, max(colorDataHM, na.rm = T)), c("green", "white", "red")),
+          cluster_columns = col_clustering, 
+          cluster_rows = row_clustering, 
+          rect_gp = gpar(col = "black", lwd = 1), 
+          cell_fun = function(j, i, x, y, width, height, fill) {
+            if(!is.na(textDataHM[i, j]))
+              grid.text(sprintf("%.3f", textDataHM[i, j]), x, y, gp = gpar(fontsize = 8))
+          })
+}
 
 
 # res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
