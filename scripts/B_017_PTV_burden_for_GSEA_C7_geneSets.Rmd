@@ -273,9 +273,13 @@ saveRDS(gse_terms_gene_data, file = "Res/017/gse_terms_gene_data.rds")
 ```
 
 ###FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE
+Supplementary table contains genes (Table 3), filter to Day (14) and Max Pearson Correlation (>0)
+
+
 ####Lung, male - missing one gene -> effect on result
 
 ```{r}
+#suppl_table = read_excel("Literature/Franco_Sanofi_article/elife-00299-supp1-v2.xlsx", sheet = 4, skip = 2)
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
 res = readRDS("Res/017/res_gsea_c7.rds")
 
@@ -283,7 +287,7 @@ FRANCOensgs = unlist(strsplit(res$genesENS[res$ptv_type == "55_FRANCO_BLOOD_SANO
 FRANCOsymbols = unlist(strsplit(res$genesHugo[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";"))
 
 res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
-res_fishtest %>% filter(SYMBOL %in% FRANCOsymbols) %>% filter(category %in% c("Lung")) %>% View()
+res_fishtest %>% filter(SYMBOL %in% FRANCOsymbols) %>% filter(category %in% "Lung") %>% View()
 
 fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
 fun_TumorIncFishTest(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
@@ -329,6 +333,33 @@ fun_TumorSurvPlotDS(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)
 fun_TumorSurvPlotOS(tumor = "Bladder", gender = "male", geneset = FRANCOensgs)
 
 ```
+
+##Other dataset from FRANCO article
+
+```{r}
+source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+suppl_table = read_excel("Literature/Franco_Sanofi_article/elife-00299-supp1-v2.xlsx", sheet = 2, skip = 2)
+hugo_symbols = sort(unique(suppl_table$GeneID))
+gene_match = bitr(geneID = hugo_symbols, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+table(hugo_symbols %in% gene_match$SYMBOL)
+hugo_symbols[!hugo_symbols %in% gene_match$SYMBOL]
+
+#ASAHL -> NAAA, C1orf85 -> GLMP, C21orf57 -> YBEY, CGI-96 -> RRP7A, D4S234E -> NSG1, DKFZP434B0335 -> TECPR1, EMR3 -> ADGRE3, FAM119B -> EEF1AKMT3, KIAA0391 -> PRORP, LOC401233 -> ?, LOC649143 -> ?, LRRC37A4 ->   LRRC37A4P, MGC57346 -> ARF2P, PVRL2 -> NECTIN2, RIPK5 -> DSTYK, TREML3 ->  TREML3P
+
+hugo_symbols2 = c(hugo_symbols[hugo_symbols %in% gene_match$SYMBOL], "NAAA", "GLMP", "YBEY", "RRP7A", "NSG1", "TECPR1", "ADGRE3", "EEF1AKMT3", "PRORP", " LRRC37A4P", "ARF2P", "NECTIN2", "DSTYK", "TREML3P")
+gene_match2 = bitr(geneID = hugo_symbols2, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+hugo_symbols2[!hugo_symbols2 %in% gene_match2$SYMBOL]
+
+ensgs = unique(gene_match2$ENSEMBL)
+
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+plan(multisession(workers = 4))
+pl_list_tumors = lapply(tumor_freq_data$TS, function(ts) {fun_TumorIncForestPlot(tumor = strsplit(ts, "_")[[1]][1], gender = strsplit(ts, "_")[[1]][2], geneset = ensgs)})
+fig = ggarrange(plotlist = pl_list_tumors, ncol = 11, nrow = 4)
+coxHRP = t(sapply(tumor_freq_data$TS, function(ts) {fun_TumorIncCoxModel(tumor = strsplit(ts, "_")[[1]][1], gender = strsplit(ts, "_")[[1]][2], geneset = ensgs)}))
+coxHRP = cbind.data.frame(TS = tumor_freq_data$TS, coxHRP)
+```
+
 
 #Lung and melanoma vs. nonim tumors
 

@@ -1,4 +1,4 @@
-Packages <- c("tidyverse", "data.table", "Rfast", "magrittr", "fastmatch", "survival", "tidycmprsk", "ggsurvfit", "cowplot", "gtsummary", "forestmodel", "circlize")
+Packages <- c("tidyverse", "data.table", "Rfast", "magrittr", "fastmatch", "survival", "tidycmprsk", "ggsurvfit", "cowplot", "gtsummary", "forestmodel", "circlize", "ComplexHeatmap")
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
 options(dplyr.summarise.inform = FALSE)
