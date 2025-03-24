@@ -331,10 +331,15 @@ res %>%
   filter(TS %in% c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male", "BrainCNS_female", "BrainCNS_male", "Ovary_female", "Pancreas_female", "Pancreas_male")) %>% 
   View()
 
-res %>% 
+
+png(filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/022/HM_Hot_vs_cold_tumors_44terms_sep.png", width = 50, height = 35, units = "cm", res = 300)
+hm = res %>% 
   filter(ptv_type %in% gse_terms) %>% 
   filter(TS %in% c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male", "BrainCNS_female", "BrainCNS_male", "Ovary_female", "Pancreas_female", "Pancreas_male")) %>% 
-  fun_hm(x_category = "ptv_type", y_category = "TS", color_var = "HR", text_var = "P", text_var_cutoff = 0.2, col_clustering = F, row_clustering = F)
+  fun_hm(x_category = "ptv_type", y_category = "TS", color_var = "HR", text_var = "P", text_var_cutoff = 0.2, col_clustering = F, row_clustering = T)
+draw(hm)
+dev.off()
+
 ```
 
 

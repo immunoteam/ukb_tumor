@@ -542,7 +542,9 @@ fun_hm = function(restbl, x_category = "TS", y_category = "ptv_type", color_var 
   textDataHM = as.matrix(textDataHM[,2:ncol(textDataHM)])
   rownames(textDataHM) = rn
   textDataHM[textDataHM > text_var_cutoff] = NA
-  Heatmap(matrix = colorDataHM, row_names_gp = gpar(fontsize = 6), 
+  Heatmap(matrix = colorDataHM, 
+          row_names_max_width = max_text_width(rn),
+          column_names_max_height = max_text_width(colnames(colorDataHM)),
           name = "HR", 
           na_col = "gray",
           col = colorRamp2(c(0, 1, max(colorDataHM, na.rm = T)), c("green", "white", "red")),
