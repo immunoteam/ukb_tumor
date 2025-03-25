@@ -545,6 +545,7 @@ fun_hm = function(restbl, x_category = "TS", y_category = "ptv_type", color_var 
   Heatmap(matrix = colorDataHM, 
           row_names_max_width = max_text_width(rn),
           column_names_max_height = max_text_width(colnames(colorDataHM)),
+          row_gap = unit(2, "mm"),
           name = "HR", 
           na_col = "gray",
           col = colorRamp2(c(0, 1, max(colorDataHM, na.rm = T)), c("green", "white", "red")),

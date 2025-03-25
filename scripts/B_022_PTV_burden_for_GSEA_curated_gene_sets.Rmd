@@ -336,11 +336,44 @@ png(filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/022/HM_Hot_vs_co
 hm = res %>% 
   filter(ptv_type %in% gse_terms) %>% 
   filter(TS %in% c("Melanoma_female", "Melanoma_male", "Lung_female", "Lung_male", "Bladder_female", "Bladder_male", "Kidney_female", "Kidney_male", "BrainCNS_female", "BrainCNS_male", "Ovary_female", "Pancreas_female", "Pancreas_male")) %>% 
-  fun_hm(x_category = "ptv_type", y_category = "TS", color_var = "HR", text_var = "P", text_var_cutoff = 0.2, col_clustering = F, row_clustering = T)
+  fun_hm(x_category = "ptv_type", y_category = "TS", color_var = "HR", text_var = "P", text_var_cutoff = 0.2, col_clustering = T, row_clustering = T)
 draw(hm)
 dev.off()
 
 ```
 
+#All tumors
+
+```{r}
+source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+res = readRDS("Res/022/res_gsea_c2.rds")
+
+broca_crp = c("ALK", "APC", "ATM", "ATR", "AXIN2", "BAP1", "BARD1", "BMPR1A", "BRCA1", "BRCA2", "BRIP1", "CDH1", "CDK4", "CDK12", "CDKN2A", "CHEK2", "CTNNA1", "DICER1", "EPCAM", "FANCM", "FH", "FLCN", "GEN1", "GREM1", "HOXB13", "MEN1", "MET", "MITF", "MLH1", "MLH3", "MSH2", "MSH3", "MSH6", "MUTYH", "NBN", "NF1", "NF2", "NTHL1", "PALB2", "PHOX2B", "PIK3CA", "PMS2", "POLD1", "POLE", "POT1", "PRKAR1A", "PTCH1", "PTEN", "RAD51B", "RAD51C", "RAD51D", "RB1", "RECQL", "RET", "RNF43", "RPS20", "SDHB", "SDHC", "SDHD", "SMAD4", "SMARCA4", "TP53", "TSC1", "TSC2", "VHL")
+terms_symbols = res %>% dplyr::select(ptv_type, genes_symbols) %>% unique()
+terms_symbols$containsBCRP = future_sapply(terms_symbols$genes_symbols, function(x) sum(broca_crp %fin% unlist(strsplit(x, ";"), use.names = F)))
+
+res %<>% left_join(terms_symbols, by = "ptv_type")
+
+resF = res %>% filter(containsBCRP == 0, P < 0.1)
+gseTermsF = unique(resF$ptv_type)
+plan(multisession(workers = 8))
+compDF = t(future_sapply(gseTermsF, function(x) {
+  c(resF %>% filter(ptv_type == x, HR > 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, HR > 1, P < 0.05) %>% nrow(),
+    resF %>% filter(ptv_type == x, HR < 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, HR < 1, P < 0.05) %>% nrow())
+}))
+colnames(compDF) = c("over_01", "over_005", "under_01", "under_005")
+compDF = cbind.data.frame(id = gseTermsF, compDF)
+
+compDF %>% filter(over_01 >= 7) %>% pull(id) -> gse_terms
+
+png(filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/022/HM_more_tumor_types_129terms.png", width = 110, height = 60, units = "cm", res = 300)
+hm = res %>% 
+  filter(ptv_type %in% gse_terms) %>%
+  fun_hm(x_category = "ptv_type", y_category = "TS", color_var = "HR", text_var = "P", text_var_cutoff = 0.2, col_clustering = T, row_clustering = T)
+draw(hm)
+dev.off()
+```
 
 
