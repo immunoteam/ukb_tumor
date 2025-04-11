@@ -289,9 +289,9 @@ FRANCOsymbols = unlist(strsplit(res$genesHugo[res$ptv_type == "55_FRANCO_BLOOD_S
 res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
 res_fishtest %>% filter(SYMBOL %in% FRANCOsymbols) %>% filter(category %in% "Lung") %>% View()
 
-fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
+fun_TumorIncCoxModel(tumor = "Lung", gender = "all", geneset = FRANCOensgs)
 fun_TumorIncFishTest(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
-fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
+fun_TumorIncForestPlot(tumor = "Lung", gender = "all", geneset = FRANCOensgs)
 fun_TumorIncStat(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
 fun_TumorSurvPlotDS(tumor = "Lung", gender = "female", geneset = FRANCOensgs)
 fun_TumorSurvPlotOS(tumor = "Lung", gender = "male", geneset = FRANCOensgs)

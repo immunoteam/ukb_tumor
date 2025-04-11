@@ -1,0 +1,100 @@
+---
+title: "B_023_Synonimuos_mutations"
+output: html_document
+date: "2025-04-08"
+---
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("biomaRt")
+Packages <- c("biomaRt", "data.table", "tidyverse", "magrittr", "stringi", "vroom", "Rfast", "fastmatch", "survival", "forestmodel")
+#"future.apply", "clusterProfiler", "org.Hs.eg.db", "hgnc", "gridExtra", "ggpubr", "ComplexHeatmap", "tidycmprsk", "circlize"
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+```
+
+#Determine the location of the genes
+
+```{r}
+load("Objects/017/gsea_c7_genesets")
+geneSetsENS[["FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"]]
+
+genesFRANCO = data.frame(SYMBOL = geneSets[["FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"]], ENSEMBL = geneSetsENS[["FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"]])
+
+biolist <- as.data.frame(listMarts())
+ensembl=useMart("ensembl")
+esemblist <- as.data.frame(listDatasets(ensembl))
+ensembl = useDataset("hsapiens_gene_ensembl",mart=ensembl)
+filters = listFilters(ensembl)
+attributes = listAttributes(ensembl)
+
+t2g<-getBM(attributes=c('ensembl_gene_id',"ensembl_gene_id_version",'chromosome_name','start_position','end_position'), mart = ensembl)
+
+genesFRANCO %<>% left_join(t2g, by = c("ENSEMBL" = "ensembl_gene_id"))
+rm(attributes, biolist, ensembl, esemblist, filters, geneSets, geneSetsENS)
+
+saveRDS(genesFRANCO, file = "Objects/023/genesFRANCO.rds")
+
+```
+
+#Calculate synonimous burden for FRANCO geneset
+
+```{r}
+genesFRANCO = readRDS("Objects/023/genesFRANCO.rds")
+genesFRANCOf = genesFRANCO %>% filter(chromosome_name != "X")
+
+patIDs = pbapply::pblapply(1:22, function(y) {
+  syn_chr = vroom(paste0("PTVvars/dl_20250331/Synonimous/SynonymousBurden_chr", y, ".tsv"), show_col_types = FALSE)
+  #syn_chr %<>% arrange(Patient.ID)
+  syn_chr$Patient.ID
+})
+sapply(2:22, function(y) {identical(patIDs[[y-1]], patIDs[[y]])}) #NO
+
+synb_franco = apply(genesFRANCOf, 1, function(x) {
+  syn_chr = vroom(paste0("PTVvars/dl_20250331/Synonimous/SynonymousBurden_chr", x[4], ".tsv"), show_col_types = FALSE)
+  syn_chr %<>% arrange(Patient.ID)
+  temp = stri_detect_fixed(syn_chr$Genes, x[2])
+  names(temp) = syn_chr$Patient.ID
+  temp
+}, simplify = F)
+sapply(2:22, function(y) {identical(names(synb_franco[[y-1]]), names(synb_franco[[y]]))}) #TRUE
+
+synb_franco_tbl = do.call(cbind, synb_franco)
+dim(synb_franco_tbl)
+
+synbFRANCO = rowsums(synb_franco_tbl)
+names(synbFRANCO) = names(synb_franco[[1]])
+
+saveRDS(synbFRANCO, file = "Objects/023/synbFRANCO.rds")
+summary(synbFRANCO)
+```
+
+#Cox model
+
+```{r}
+control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_male.rds")
+m = max(control_data$date_of_death, na.rm = T)
+control_data %<>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(m - birthdate)
+  )) %>% 
+  mutate(status = 0)
+tumor_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/Lung_male.rds")
+tumor_data %<>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 1)
+ukb = rbind(tumor_data, control_data)
+ukb$synb = synbFRANCO[fmatch(ukb$eid, names(synbFRANCO))]
+
+sel_gpcas = paste0("gpca", 1:10)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("synb", sel_gpcas), collapse = "+")))
+res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+summary(res.cox)
+forest_model(res.cox)
+```
+
