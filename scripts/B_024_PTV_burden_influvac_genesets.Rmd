@@ -7,7 +7,7 @@ date: "2025-04-28"
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
 #library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("tidyverse", "data.table", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db")
+Packages <- c("tidyverse", "data.table", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "stringi")
 #, "hgnc", , , "survival", "pbapply", "forestmodel", "gridExtra", "ggpubr", "rvest", "Rfast", , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", ,
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
@@ -136,28 +136,300 @@ genesets$geneset_size = sapply(genesets$genes, function(x) length(strsplit(x, ";
 plan(multisession(workers = 4))
 genesets$incCoxHR = sapply(genesets$genes, function(x) fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
 genesets$incCoxPvalue = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
-genesets$survOS = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])[""])
-genesets$survOS = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])[""])
+genesets$survOSCoxHR = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
+genesets$survOSCoxPvalue = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
+genesets$survDSCoxHR = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxDS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
+genesets$survDSCoxPvalue = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxDS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
 
-fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = tempensgs)
+save(genesets, file = "Objects/024/genesets_data")
 
-
-
-
-
-fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = tempensgs)
-fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = tempensgs)
-fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = tempensgs)
-fun_TumorSurvPlotOS(tumor = "Lung", gender = "male", geneset = tempensgs)
 ```
 
-Konstorum (combined - 19) + Franco -> 43 genes -> HR=1.5891723417, P=0.0002357478
-Rogers(9) + Franco -> 33 genes -> HR=1.710285, P=5.557781e-05. Survival plot!
-Rogers(47) + Franco -> 71 genes -> HR=1.381852169, P=0.002540089
-Rogers(95) + Franco -> 119 genes -> HR=1.27992930, P=0.00436833
-Konstorum (combined - 19) + Rogers(9) + Franco -> 52 genes -> HR=1.455392212, P=0.001063706
-Konstorum (combined - 19) + Rogers(47) + Franco -> 90 genes -> HR=1.308101545, P=0.005662952
-Konstorum (combined - 19) + Rogers(95) + Franco -> 138 genes -> HR=1.243320162, P=0.007541412
+#With smoking data
 
+```{r}
+smoking_data = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/Variables/20116.txt")
+smoking_data %<>% mutate(smoking_status1 = case_when(
+  .$value == -3 ~ "PreferNotToAnswer",
+  .$value == 0 ~ "never",
+  .$value == 1 ~ "previous",
+  .$value == 2 ~ "current"
+))
+table(smoking_data$value, smoking_data$smoking_status1)
 
+smoking_data %<>% 
+  select(eid, UKB_column_name, smoking_status1) %>% 
+  pivot_wider(id_cols = eid, names_from = UKB_column_name, values_from = smoking_status1) %>% 
+  unite(col = "smst_unite", c("20116-0.0", "20116-1.0", "20116-2.0", "20116-3.0"), sep = "", remove = F, na.rm = T) %>% 
+  mutate(smoking_status = case_when(
+    stri_detect_fixed(pattern = "current", smst_unite) | stri_detect_fixed(pattern = "Current", smst_unite) ~ "current",
+    stri_detect_fixed(pattern = "previous", smst_unite) | stri_detect_fixed(pattern = "Previous", smst_unite) ~ "previous",
+    stri_detect_fixed(pattern = "never", smst_unite) | stri_detect_fixed(pattern = "Never", smst_unite) ~ "never"
+  ), .after = eid) %>% 
+  select(eid, smoking_status) %>% 
+  unique()
+smoking_data$eid = as.character(smoking_data$eid)
+
+```
+
+##Incidence
+
+```{r}
+load("Objects/024/genesets_data")
+
+fun_TumorIncCoxModel_WithSmokingStat = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
+  if(control == "nottumorous" & gender == "all") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
+  } else if(control == "nottumorous" & gender == "female") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_female.rds"))
+  } else if(control == "nottumorous" & gender == "male") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_male.rds"))
+  }
+  m = max(control_data$date_of_death, na.rm = T)
+  control_data %<>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(m - birthdate)
+    )) %>% 
+    mutate(status = 0)
+  tumor_data = bind_rows(lapply(tumor, function(tmr) {
+    if(tmr == "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
+    } else if(tmr == "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
+    } else if(tmr != "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
+    } else if(tmr != "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
+    }
+  }))
+  tumor_data %<>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 1)
+  tempdf = rbind(tumor_data, control_data)
+  rm(tumor_data, control_data)
+  tempdf$smoking_status = smoking_data$smoking_status[match(tempdf$eid, smoking_data$eid)]
+  tempdf %<>% mutate(smoking_status = factor(smoking_status, levels = c("never", "previous", "current")))
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
+  ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tempdf$eid)
+  ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
+  tempdf %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
+  if(ptv_burden_cat == T) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
+  case_n_ptvb_1 = tempdf %>% filter(status == 1, PTVb == 1) %>% nrow()
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, smoking_status, all_of(sel_gpcas))
+  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender != "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, smoking_status, all_of(sel_gpcas))
+  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] == 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, sex, smoking_status, all_of(sel_gpcas))
+  } else {
+    tempdf %<>% dplyr::select(eid, time, status, smoking_status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+  res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+    out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
+  } else {
+    out = c(NA, NA)
+  }
+  names(out) = c("HR", "Pvalue")
+  out
+}
+
+fun_TumorIncCoxModel_NeverSmokers = function(tumor = "all", control = "nottumorous", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
+  if(control == "nottumorous" & gender == "all") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
+  } else if(control == "nottumorous" & gender == "female") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_female.rds"))
+  } else if(control == "nottumorous" & gender == "male") {
+    control_data = readRDS(paste0(dataset_dir, "nottumorous_male.rds"))
+  }
+  m = max(control_data$date_of_death, na.rm = T)
+  control_data %<>% 
+    mutate(time = case_when(
+      death == T ~ as.numeric(date_of_death - birthdate),
+      death == F ~ as.numeric(m - birthdate)
+    )) %>% 
+    mutate(status = 0)
+  tumor_data = bind_rows(lapply(tumor, function(tmr) {
+    if(tmr == "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
+    } else if(tmr == "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
+    } else if(tmr != "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
+    } else if(tmr != "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
+    }
+  }))
+  tumor_data %<>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(time = as.numeric((diag_date - birthdate))) %>% 
+    mutate(status = 1)
+  tempdf = rbind(tumor_data, control_data)
+  rm(tumor_data, control_data)
+  tempdf$smoking_status = smoking_data$smoking_status[match(tempdf$eid, smoking_data$eid)]
+  tempdf %<>% filter(smoking_status == "never")
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
+  ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tempdf$eid)
+  ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
+  tempdf %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
+  if(ptv_burden_cat == T) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
+  case_n_ptvb_1 = tempdf %>% filter(status == 1, PTVb == 1) %>% nrow()
+  #Select predictors
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, all_of(sel_gpcas))
+  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender != "all") {
+    tempdf %<>% dplyr::select(eid, time, status, PTVb, all_of(sel_gpcas))
+  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] == 0 & gender == "all") {
+    tempdf %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
+  } else {
+    tempdf %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  }
+  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+  res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
+  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+    out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
+  } else {
+    out = c(NA, NA)
+  }
+  names(out) = c("HR", "Pvalue")
+  out
+}
+
+genesets$incCoxHR_withSmokinStat = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel_WithSmokingStat(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
+genesets$incCoxPvalue_withSmokinStat = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel_WithSmokingStat(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
+
+genesets$incCoxHR_NeverSmokers = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel_NeverSmokers(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
+genesets$incCoxPvalue_NeverSmokers = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel_NeverSmokers(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
+
+save(genesets, file = "Objects/024/genesets_data_EXT1")
+
+```
+
+##Survival
+
+```{r}
+fun_TumorSurvCoxOS_WithSmokingStat = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
+  tumor_data = bind_rows(lapply(tumor, function(tmr) {
+    if(tmr == "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
+    } else if(tmr == "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
+    } else if(tmr != "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
+    } else if(tmr != "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
+    }
+  }))
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
+  ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tumor_data$eid)
+  ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
+  tumor_data %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
+  if(ptv_burden_cat == T) {tumor_data$PTVb = as.factor(ifelse(tumor_data$PTVb == 0, 0, 1))}
+  m = max(tumor_data$date_of_death, na.rm = T)
+  tumorous_d = tumor_data %>%
+    filter(death == T) %>%
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(surv_time = as.numeric(date_of_death - diag_date))
+  tumorous_alive = tumor_data %>% 
+    filter(death == F) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(surv_time = as.numeric(m - diag_date))
+  survdf = bind_rows(tumorous_d, tumorous_alive)
+  survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
+  survdf$smoking_status = smoking_data$smoking_status[match(survdf$eid, smoking_data$eid)]
+  survdf %<>% mutate(smoking_status = factor(smoking_status, levels = c("never", "previous", "current")))
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, smoking_status, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, smoking_status, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, smoking_status, age, all_of(sel_gpcas))
+  } else {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, smoking_status, age, all_of(sel_gpcas))
+  }
+  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  if(gender == "all") {
+    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
+  } else {
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
+  }
+  myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
+  res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
+  out = summary(res.cox)$coefficients["PTVb1",c("exp(coef)","Pr(>|z|)")]
+  names(out) = c("HR", "Pvalue")
+  out
+}
+
+fun_TumorSurvCoxOS_NeverSmokers = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
+  tumor_data = bind_rows(lapply(tumor, function(tmr) {
+    if(tmr == "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
+    } else if(tmr == "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, "tumorous_", gender, ".rds"))
+    } else if(tmr != "all" & gender == "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, ".rds"))
+    } else if(tmr != "all" & gender != "all") {
+      tmr_data = readRDS(paste0(dataset_dir, tmr, "_", gender, ".rds"))
+    }
+  }))
+  ptvb_MAF104 = fread(paste0(ptv_dir, "MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv"))
+  ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes")) %>% filter(eid %fin% tumor_data$eid)
+  ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
+  tumor_data %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
+  if(ptv_burden_cat == T) {tumor_data$PTVb = as.factor(ifelse(tumor_data$PTVb == 0, 0, 1))}
+  m = max(tumor_data$date_of_death, na.rm = T)
+  tumorous_d = tumor_data %>%
+    filter(death == T) %>%
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(surv_time = as.numeric(date_of_death - diag_date))
+  tumorous_alive = tumor_data %>% 
+    filter(death == F) %>% 
+    arrange(diag_date) %>% 
+    distinct(eid, .keep_all = T) %>% 
+    mutate(surv_time = as.numeric(m - diag_date))
+  survdf = bind_rows(tumorous_d, tumorous_alive)
+  survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
+  survdf$smoking_status = smoking_data$smoking_status[match(survdf$eid, smoking_data$eid)]
+  survdf %<>% filter(smoking_status == "never")
+  sel_gpcas = paste0("gpca", 1:gpca_nb)
+  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
+  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
+  } else {
+    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  }
+  if(gender == "all") {
+    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
+  } else {
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
+  }
+  myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
+  res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
+  out = summary(res.cox)$coefficients["PTVb1",c("exp(coef)","Pr(>|z|)")]
+  names(out) = c("HR", "Pvalue")
+  out
+}
+
+genesets$survOSCoxHR_withSmokinStat = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS_WithSmokingStat(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
+genesets$survOSCoxPvalue_withSmokinStat = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS_WithSmokingStat(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
+
+genesets$survOSCoxHR_NeverSmokers = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS_NeverSmokers(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
+genesets$survOSCoxPvalue_NeverSmokers = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS_NeverSmokers(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
+```
 

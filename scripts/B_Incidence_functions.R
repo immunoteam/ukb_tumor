@@ -306,15 +306,13 @@ fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   } else {
     survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
   }
-  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
-  } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
-  }
   myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
   res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
-  out = summary(res.cox)$coefficients["PTVb1",c("exp(coef)","Pr(>|z|)")]
+  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+    out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
+  } else {
+    out = c(NA, NA)
+  }
   names(out) = c("HR", "Pvalue")
   out
 }
@@ -464,15 +462,13 @@ fun_TumorSurvCoxDS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   } else {
     survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
   }
-  case_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
-  } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
-  }
   myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
   res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
-  out = summary(res.cox)$coefficients["PTVb1",c("exp(coef)","Pr(>|z|)")]
+  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+    out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
+  } else {
+    out = c(NA, NA)
+  }
   names(out) = c("HR", "Pvalue")
   out
 }
