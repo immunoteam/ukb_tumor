@@ -1,0 +1,163 @@
+---
+title: "B_024_PTV_burden_influvac_genesets"
+output: html_document
+date: "2025-04-28"
+---
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db")
+#, "hgnc", , , "survival", "pbapply", "forestmodel", "gridExtra", "ggpubr", "rvest", "Rfast", , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", ,
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+# pal_npg("nrc")(9)
+# scales::show_col(pal_npg("nrc")(9))
+# pal_npg("nrc", alpha = 0.8)(9)
+# scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+options(future.globals.maxSize= 2147483648)
+source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+```
+
+#Common object
+
+```{r}
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+
+ukb_ptvENSG = as.list(ptvb_MAF104$ptvgenes)
+ukb_ptvENSG = lapply(ukb_ptvENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
+names(ukb_ptvENSG) = ptvb_MAF104$eid
+rm(ptvb_MAF104)
+
+```
+
+#Konstorum
+
+```{r}
+geneset_raw = fread("Influenza_objects/geneset_Konstorum_UP_highresp.txt")
+geneset_raw = fread("Influenza_objects/geneset_Konstorum_UP_lowresp.txt")
+
+geneset_raw$Transcript = gsub("\\..*", "", geneset_raw$Transcript)
+
+tempensgs = geneset_raw$Transcript
+ptv_data = future_sapply(ukb_ptvENSG, function(u) {
+  sum(u %fin% tempensgs)
+})
+table(ptv_data)
+saveRDS(ptv_data, file = "Objects/024/ptvb_Konstorum_HR.rds")
+saveRDS(ptv_data, file = "Objects/024/ptvb_Konstorum_LR.rds")
+
+```
+
+##Both
+
+```{r}
+geneset_raw1 = fread("Influenza_objects/geneset_Konstorum_UP_highresp.txt")
+geneset_raw2 = fread("Influenza_objects/geneset_Konstorum_UP_lowresp.txt")
+geneset_raw = rbind(geneset_raw1, geneset_raw2)
+rm(geneset_raw1, geneset_raw2)
+
+geneset_raw$Transcript = gsub("\\..*", "", geneset_raw$Transcript)
+
+tempensgs = unique(geneset_raw$Transcript)
+ptv_data = future_sapply(ukb_ptvENSG, function(u) {
+  sum(u %fin% tempensgs)
+})
+table(ptv_data)
+saveRDS(ptv_data, file = "Objects/024/ptvb_Konstorum_HR_LR.rds")
+
+```
+
+#Rogers
+
+```{r}
+geneset_rogers = fread("Influenza_objects/geneset_Rogers.txt")
+hugo_symbols_unique_rogers = unique(geneset_rogers$Gene)
+gene_match_rogers = bitr(geneID = hugo_symbols_unique_rogers, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+
+ensgs_10 = gene_match_rogers$ENSEMBL[match(geneset_rogers$Gene[1:10], gene_match_rogers$SYMBOL)]
+ensgs_10 = ensgs_10[!is.na(ensgs_10)]
+ensgs_50 = gene_match_rogers$ENSEMBL[match(geneset_rogers$Gene[1:50], gene_match_rogers$SYMBOL)]
+ensgs_50 = ensgs_50[!is.na(ensgs_50)]
+ensgs_100 = gene_match_rogers$ENSEMBL[match(geneset_rogers$Gene[1:100], gene_match_rogers$SYMBOL)]
+ensgs_100 = ensgs_100[!is.na(ensgs_100)]
+
+ptv_data = future_sapply(ukb_ptvENSG, function(u) {
+  sum(u %fin% ensgs_100)
+})
+table(ptv_data)
+saveRDS(ptv_data, file = "Objects/024/ptvb_Rogers_first10.rds")
+saveRDS(ptv_data, file = "Objects/024/ptvb_Rogers_first50.rds")
+saveRDS(ptv_data, file = "Objects/024/ptvb_Rogers_first100.rds")
+```
+
+#Univariate models
+
+```{r}
+genesets = expand.grid(Franco = c("yes", "no"), Konstorum_HR = c("yes", "no"), Konstorum_LR = c("yes", "no"), Rogers = c(0,10,50,100), stringsAsFactors = F)
+genesets %<>% filter(!(Franco == "no" & Konstorum_HR == "no" & Konstorum_LR == "no" & Rogers == 0))
+
+res = readRDS("Res/017/res_gsea_c7.rds")
+FRANCOensgs = unlist(strsplit(res$genesENS[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";"))
+rm(res)
+
+geneset_rogers = fread("Influenza_objects/geneset_Rogers.txt")
+hugo_symbols_unique_rogers = unique(geneset_rogers$Gene)
+gene_match_rogers = bitr(geneID = hugo_symbols_unique_rogers, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+rm(hugo_symbols_unique_rogers)
+
+genesets$genes = apply(genesets, 1, function(x) {
+  tempgenes = NULL
+  if(x[1] == "yes") {
+    tempgenes = FRANCOensgs
+  }
+  if(x[2] == "yes") {
+    tempdf = fread("Influenza_objects/geneset_Konstorum_UP_highresp.txt")
+    tempgenes = unique(c(tempgenes, gsub("\\..*", "", tempdf$Transcript)))
+    rm(tempdf)
+  }
+  if(x[3] == "yes") {
+    tempdf = fread("Influenza_objects/geneset_Konstorum_UP_lowresp.txt")
+    tempgenes = unique(c(tempgenes, gsub("\\..*", "", tempdf$Transcript)))
+    rm(tempdf)
+  }
+  if(as.numeric(x[4]) > 0) {
+    tempensgs = gene_match_rogers$ENSEMBL[match(geneset_rogers$Gene[1:as.numeric(x[4])], gene_match_rogers$SYMBOL)]
+    tempensgs = tempensgs[!is.na(tempensgs)]
+    tempgenes = unique(c(tempgenes, tempensgs))
+  }
+  paste0(tempgenes, collapse = ";")
+})
+genesets$geneset_size = sapply(genesets$genes, function(x) length(strsplit(x, ";")[[1]]))
+
+plan(multisession(workers = 4))
+genesets$incCoxHR = sapply(genesets$genes, function(x) fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
+genesets$incCoxPvalue = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
+genesets$survOS = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])[""])
+genesets$survOS = future_sapply(genesets$genes, function(x) fun_TumorSurvCoxOS(tumor = "Lung", gender = "male", geneset = strsplit(x, ";")[[1]])[""])
+
+fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = tempensgs)
+
+
+
+
+
+fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = tempensgs)
+fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = tempensgs)
+fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = tempensgs)
+fun_TumorSurvPlotOS(tumor = "Lung", gender = "male", geneset = tempensgs)
+```
+
+Konstorum (combined - 19) + Franco -> 43 genes -> HR=1.5891723417, P=0.0002357478
+Rogers(9) + Franco -> 33 genes -> HR=1.710285, P=5.557781e-05. Survival plot!
+Rogers(47) + Franco -> 71 genes -> HR=1.381852169, P=0.002540089
+Rogers(95) + Franco -> 119 genes -> HR=1.27992930, P=0.00436833
+Konstorum (combined - 19) + Rogers(9) + Franco -> 52 genes -> HR=1.455392212, P=0.001063706
+Konstorum (combined - 19) + Rogers(47) + Franco -> 90 genes -> HR=1.308101545, P=0.005662952
+Konstorum (combined - 19) + Rogers(95) + Franco -> 138 genes -> HR=1.243320162, P=0.007541412
+
+
+
