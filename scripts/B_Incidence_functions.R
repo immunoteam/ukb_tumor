@@ -266,7 +266,7 @@ fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG0
 }
 
 
-fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/") {
+fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
       tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
@@ -320,7 +320,7 @@ fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00
 }
 
 
-fun_TumorSurvForestOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/000_Sub_dataset/", ptv_dir = "C:/Users/bagil/Desktop/MyGit/ukb_tumor/objects/PTVvars/") {
+fun_TumorSurvForestOS = function(tumor = "all", gender = "all", geneset = c("ENSG00000104804"), ptv_burden_cat = TRUE, gpca_nb = 10, threads, dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
       tmr_data = readRDS(paste0(dataset_dir, "tumorous_all.rds"))
