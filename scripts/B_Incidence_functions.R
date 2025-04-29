@@ -44,26 +44,24 @@ fun_TumorIncForestPlot = function(tumor = "all", control = "nottumorous", gender
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tempdf %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
   if(ptv_burden_cat == T) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
-  case_n_ptvb_1 = tempdf %>% filter(status == 1, PTVb == 1) %>% nrow()
-  #Select predictors
+  
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender == "all") {
-    tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, all_of(sel_gpcas))
-  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender != "all") {
-    tempdf %<>% dplyr::select(eid, time, status, PTVb, all_of(sel_gpcas))
-  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] == 0 & gender == "all") {
-    tempdf %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
-  } else {
-    tempdf %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, all_of(sel_gpcas))
+  if(gender %in% c("female", "male")) {
+    tempdf %<>% dplyr::select(-sex)
   }
+  if(length(unique(tempdf$PTVb)) == 1) {
+    tempdf %<>% dplyr::select(-PTVb)
+  }
+  if("PTVb" %in% colnames(tempdf)) {
+    case_n_ptvb_1 = tempdf %>% filter(status == 1, PTVb == 1) %>% nrow()
+  } else {
+    case_n_ptvb_1 = 0
+  }
+  tt = paste0(paste0(tumor, collapse = ", "), ", ", paste0(gender, collapse = ", "), ". Geneset size: ", length(geneset), "\nTumorous patients (PTV=1): ", case_n_ptvb_1)
   myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
   res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
   fm = forest_model(model = res.cox, return_data = T)
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH.\nPatients with PTV in case group: ", case_n_ptvb_1, " Geneset size: ", length(geneset))
-  } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, ".\nPatients with PTV in case group: ", case_n_ptvb_1, ". Geneset size: ", length(geneset))
-  }
   fm$plot + labs(title = tt)
 }
 
@@ -107,21 +105,19 @@ fun_TumorIncCoxModel = function(tumor = "all", control = "nottumorous", gender =
   ptvb_MAF104$PTVb = sapply(ptvb_MAF104$ptvgenes, function(x) sum(unique(unlist(strsplit(x, ","), use.names = F)) %fin% geneset))
   tempdf %<>% left_join(ptvb_MAF104, by = "eid") %>% dplyr::select(-ptvgenes)
   if(ptv_burden_cat == T) {tempdf$PTVb = as.factor(ifelse(tempdf$PTVb == 0, 0, 1))}
-  case_n_ptvb_1 = tempdf %>% filter(status == 1, PTVb == 1) %>% nrow()
-  #Select predictors
+  
+  
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender == "all") {
-    tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, all_of(sel_gpcas))
-  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] != 0 & gender != "all") {
-    tempdf %<>% dplyr::select(eid, time, status, PTVb, all_of(sel_gpcas))
-  } else if(table(tempdf$PTVb[tempdf$cancer_type != "No_cancer"])["1"] == 0 & gender == "all") {
-    tempdf %<>% dplyr::select(eid, time, status, sex, all_of(sel_gpcas))
-  } else {
-    tempdf %<>% dplyr::select(eid, time, status, all_of(sel_gpcas))
+  tempdf %<>% dplyr::select(eid, time, status, PTVb, sex, all_of(sel_gpcas))
+  if(gender %in% c("female", "male")) {
+    tempdf %<>% dplyr::select(-sex)
   }
-  myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
-  res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
-  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+  if(length(unique(tempdf$PTVb)) == 1) {
+    tempdf %<>% dplyr::select(-PTVb)
+  }
+  if("PTVb" %in% colnames(tempdf)) {
+    myformula = as.formula(paste('Surv(time, status) ~ ', paste0(colnames(tempdf)[4:ncol(tempdf)], collapse = "+")))
+    res.cox <- coxph(myformula, data = tempdf, id = tempdf$eid)
     out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
   } else {
     out = c(NA, NA)
@@ -246,23 +242,23 @@ fun_TumorSurvPlotOS = function(tumor = "all", gender = "all", geneset = c("ENSG0
     mutate(surv_time = as.numeric(m - diag_date))
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
-  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
-  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
+  if(length(unique(survdf$PTVb)) == 1) {
+    print("No tumorous patients with geneset specific PTV")
   } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
+    dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+    alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", paste0(gender, collapse = ", "), ". Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1): ", alive_n_ptvb_1)
+    survfit2(Surv(surv_time, surv_event) ~ PTVb, data = survdf) %>% 
+      ggsurvfit() +
+      labs(
+        x = "Days",
+        y = "Overall survival probability"
+      ) + 
+      add_confidence_interval() +
+      add_pvalue(location = c("annotation")) +
+      add_risktable() +
+      labs(title = tt)
   }
-  survfit2(Surv(surv_time, surv_event) ~ PTVb, data = survdf) %>% 
-    ggsurvfit() +
-    labs(
-      x = "Days",
-      y = "Overall survival probability"
-    ) + 
-    add_confidence_interval() +
-    add_pvalue(location = c("annotation")) +
-    add_risktable() +
-    labs(title = tt)
 }
 
 
@@ -297,18 +293,16 @@ fun_TumorSurvCoxOS = function(tumor = "all", gender = "all", geneset = c("ENSG00
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
-  } else {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  if(gender %in% c("female", "male")) {
+    survdf %<>% dplyr::select(-sex)
   }
-  myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
-  res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
-  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+  if(length(unique(survdf$PTVb)) == 1) {
+    survdf %<>% dplyr::select(-PTVb)
+  }
+  if("PTVb" %in% colnames(survdf)) {
+    myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
+    res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
     out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
   } else {
     out = c(NA, NA)
@@ -349,22 +343,21 @@ fun_TumorSurvForestOS = function(tumor = "all", gender = "all", geneset = c("ENS
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
-  } else {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  if(gender %in% c("female", "male")) {
+    survdf %<>% dplyr::select(-sex)
   }
-  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
-  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
-  } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
+  if(length(unique(survdf$PTVb)) == 1) {
+    survdf %<>% dplyr::select(-PTVb)
   }
+  if("PTVb" %in% colnames(survdf)) {
+    dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+    alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
+  } else {
+    dead_n_ptvb_1 = 0
+    alive_n_ptvb_1 = 0
+  }
+  tt = paste0(paste0(tumor, collapse = ", "), ", ", paste0(gender, collapse = ", "), ". Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
   res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
   fm = forest_model(model = res.cox, return_data = T)
@@ -402,23 +395,24 @@ fun_TumorSurvPlotDS = function(tumor = "all", gender = "all", geneset = c("ENSG0
     mutate(surv_time = as.numeric(m - diag_date))
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
-  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
-  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
+  
+  if(length(unique(survdf$PTVb)) == 1) {
+    print("No tumorous patients with geneset specific PTV")
   } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
+    dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+    alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
+    tt = paste0(paste0(tumor, collapse = ", "), ", ", paste0(gender, collapse = ", "), ". Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1): ", alive_n_ptvb_1)
+    survfit2(Surv(surv_time, surv_event) ~ PTVb, data = survdf) %>% 
+      ggsurvfit() +
+      labs(
+        x = "Days",
+        y = "Disease specific survival probability"
+      ) + 
+      add_confidence_interval() +
+      add_pvalue(location = c("annotation")) +
+      add_risktable() +
+      labs(title = tt)
   }
-  survfit2(Surv(surv_time, surv_event) ~ PTVb, data = survdf) %>% 
-    ggsurvfit() +
-    labs(
-      x = "Days",
-      y = "Disease specific survival probability"
-    ) + 
-    add_confidence_interval() +
-    add_pvalue(location = c("annotation")) +
-    add_risktable() +
-    labs(title = tt)
 }
 
 
@@ -452,19 +446,18 @@ fun_TumorSurvCoxDS = function(tumor = "all", gender = "all", geneset = c("ENSG00
     mutate(surv_time = as.numeric(m - diag_date))
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
+  
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
-  } else {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  if(gender %in% c("female", "male")) {
+    survdf %<>% dplyr::select(-sex)
   }
-  myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
-  res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
-  if(any(grepl("PTV", rownames(summary(res.cox)$coefficients)))) {
+  if(length(unique(survdf$PTVb)) == 1) {
+    survdf %<>% dplyr::select(-PTVb)
+  }
+  if("PTVb" %in% colnames(survdf)) {
+    myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
+    res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
     out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
   } else {
     out = c(NA, NA)
@@ -505,22 +498,21 @@ fun_TumorSurvForestDS = function(tumor = "all", gender = "all", geneset = c("ENS
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
   sel_gpcas = paste0("gpca", 1:gpca_nb)
-  if(table(survdf$PTVb)["1"] != 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] != 0 & gender != "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, age, all_of(sel_gpcas))
-  } else if(table(survdf$PTVb)["1"] == 0 & gender == "all") {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, sex, age, all_of(sel_gpcas))
-  } else {
-    survdf %<>% dplyr::select(eid, surv_time, surv_event, age, all_of(sel_gpcas))
+  survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb, sex, age, all_of(sel_gpcas))
+  if(gender %in% c("female", "male")) {
+    survdf %<>% dplyr::select(-sex)
   }
-  dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
-  alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
-  if(gender == "all") {
-    tt = paste0(paste0(tumor, collapse = ", "), ", BOTH. Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
-  } else {
-    tt = paste0(paste0(tumor, collapse = ", "), ", ", gender, "Geneset size: ",  length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
+  if(length(unique(survdf$PTVb)) == 1) {
+    survdf %<>% dplyr::select(-PTVb)
   }
+  if("PTVb" %in% colnames(survdf)) {
+    dead_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 1, PTVb == 1) %>% nrow()
+    alive_n_ptvb_1 = survdf %>% dplyr::filter(surv_event == 0, PTVb == 1) %>% nrow()
+  } else {
+    dead_n_ptvb_1 = 0
+    alive_n_ptvb_1 = 0
+  }
+  tt = paste0(paste0(tumor, collapse = ", "), ", ", paste0(gender, collapse = ", "), ". Geneset size: ", length(geneset), "\nDead patients (PTV=1): ", dead_n_ptvb_1, ". Alive patients (PTV=1):", alive_n_ptvb_1)
   myformula = as.formula(paste('Surv(surv_time, surv_event) ~ ', paste0(colnames(survdf)[4:ncol(survdf)], collapse = "+")))
   res.cox = survival::coxph(myformula, data = as.data.frame(survdf))
   fm = forest_model(model = res.cox, return_data = T)
