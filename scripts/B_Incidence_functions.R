@@ -438,7 +438,6 @@ fun_TumorSurvPlotDS = function(tumor = "all",
     mutate(surv_time = as.numeric(m - diag_date))
   survdf = bind_rows(tumorous_d, tumorous_alive)
   survdf$surv_event = as.numeric(ifelse(survdf$death == T, 1, 0))
-  
   if(length(unique(survdf$PTVb)) == 1) {
     print("No tumorous patients with geneset specific PTV")
   } else {
