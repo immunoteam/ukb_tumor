@@ -343,6 +343,19 @@ fun_TumorSurvCoxOS = function(tumor = "all",
   out
 }
 
+fun_TumorSurvChisquareOS
+
+# survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb)
+# if(length(unique(survdf$PTVb)) == 1) {
+#   survdf %<>% dplyr::select(-PTVb)
+#   out = NA
+# } else {
+#   out = survdiff(Surv(surv_time, surv_event) ~ PTVb, data = survdf)$p
+# }
+# names(out) = "Pvalue"
+# out
+
+
 
 fun_TumorSurvForestOS = function(tumor = "all", 
                                  gender = "all", 
@@ -513,6 +526,20 @@ fun_TumorSurvCoxDS = function(tumor = "all",
   names(out) = c("HR", "Pvalue")
   out
 }
+
+
+fun_TumorSurvChisquareDS
+
+# survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb)
+# if(length(unique(survdf$PTVb)) == 1) {
+#   survdf %<>% dplyr::select(-PTVb)
+#   out = NA
+# } else {
+#   out = survdiff(Surv(surv_time, surv_event) ~ PTVb, data = survdf)$p
+# }
+# names(out) = "Pvalue"
+# out
+
 
 
 fun_TumorSurvForestDS = function(tumor = "all", 
