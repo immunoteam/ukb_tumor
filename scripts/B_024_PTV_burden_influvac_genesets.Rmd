@@ -172,6 +172,7 @@ fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = strsplit(genesets
 fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = strsplit(genesets$genes[14], ";")[[1]])
 
 save(genesets, file = "Objects/024/genesets_data_EXT1")
+load("Objects/024/genesets_data_EXT1")
 ```
 
 
@@ -203,6 +204,7 @@ smoking_data %<>%
   transform(eid = as.character(eid)) %>% 
   unique()
 table(smoking_data$smoking_status)
+saveRDS(smoking_data, file = "Objects/024/smoking_status.rds")
 ```
 
 
@@ -355,6 +357,8 @@ genesets$bladder_incCoxHR = future_sapply(genesets$genes, function(x) fun_TumorI
 genesets$bladder_incCoxP = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel(tumor = "Bladder", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
 genesets$all_incCoxHR = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel(tumor = "all", gender = "male", geneset = strsplit(x, ";")[[1]])["HR"])
 genesets$all_incCoxP = future_sapply(genesets$genes, function(x) fun_TumorIncCoxModel(tumor = "all", gender = "male", geneset = strsplit(x, ";")[[1]])["Pvalue"])
+
+save(genesets, file = "Objects/024/genesets_data_EXT2")
 
 fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = strsplit(genesets$genes[7], ";")[[1]])
 fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = strsplit(genesets$genes[14], ";")[[1]])
