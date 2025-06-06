@@ -1,0 +1,84 @@
+---
+title: "B_025_Franco_and_GWAS"
+output: html_document
+date: "2025-06-06"
+---
+
+#Setup
+
+```{r}
+setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
+#library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
+Packages <- c("tidyverse", "data.table", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "stringi", "forestmodel", "ggsurvfit")
+#, "hgnc", , , "survival", "pbapply", , "gridExtra", "ggpubr", "rvest", "Rfast", , , , , "tidycmprsk", , "survminer", , , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", ,
+lapply(Packages, require, character.only = TRUE)
+rm(Packages)
+options(dplyr.summarise.inform = FALSE)
+
+# pal_npg("nrc")(9)
+# scales::show_col(pal_npg("nrc")(9))
+# pal_npg("nrc", alpha = 0.8)(9)
+# scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
+options(future.globals.maxSize= 2147483648)
+source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+plan(multisession(workers = 4))
+```
+
+#PTV burden
+
+```{r}
+res = readRDS("Res/017/res_gsea_c7.rds")
+FRANCOensgs = unlist(strsplit(res$genesENS[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";"))
+rm(res)
+
+c("ZBTB46", "PIWIL1", "B4GALT4-AS1", "CRYGEP, RPL12P17", "NBAS", "KCNMA1", "	ARHGAP26", "HECW2", "ERICH6, SELENOT", "PMP22, TEKT3", "EMP1, LINC01559", "OSBPL3, CYCS", "MRPS21P6, RPS27P18", "HNRNPA3P8, HYDINP1")
+hugo_symbols_gwas = c("ZBTB46", "PIWIL1", "B4GALT4-AS1", "CRYGEP", "RPL12P17", "NBAS", "KCNMA1", "	ARHGAP26", "HECW2", "ERICH6", "SELENOT", "PMP22, TEKT3", "EMP12", "LINC01559", "OSBPL3, CYCS", "MRPS21P6", "RPS27P18", "HNRNPA3P8", "HYDINP1")
+gene_match_gwas = bitr(geneID = hugo_symbols_gwas, fromType = "SYMBOL", toType = "ENSEMBL", OrgDb = "org.Hs.eg.db")
+
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+
+ukb_ptvENSG = as.list(ptvb_MAF104$ptvgenes)
+ukb_ptvENSG = lapply(ukb_ptvENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
+names(ukb_ptvENSG) = ptvb_MAF104$eid
+rm(ptvb_MAF104)
+
+tempensgs = c(FRANCOensgs, gene_match_gwas$ENSEMBL)
+
+ptv_data = future_sapply(ukb_ptvENSG, function(u) {
+  sum(u %fin% tempensgs)
+})
+table(ptv_data)
+saveRDS(ptv_data, file = "Objects/025/ptvb_FRANCO_GWAS.rds")
+```
+
+#Incidence, survival
+
+```{r}
+tumor = "Lung"
+tumor = "Bladder"
+
+fun_TumorIncCoxModel(tumor = tumor, geneset = tempensgs)
+fun_TumorIncCoxModel(tumor = tumor, gender = "male", geneset = tempensgs)
+fun_TumorIncCoxModel(tumor = tumor, gender = "female", geneset = tempensgs) #Only trend
+
+fun_TumorIncForestPlot(tumor = tumor, geneset = tempensgs)
+fun_TumorIncForestPlot(tumor = tumor, gender = "male", geneset = tempensgs)
+fun_TumorIncForestPlot(tumor = tumor, gender = "female", geneset = tempensgs) #Only trend
+
+fun_TumorSurvPlotOS(tumor = tumor, geneset = tempensgs)
+fun_TumorSurvPlotOS(tumor = tumor, gender = "male", geneset = tempensgs)
+fun_TumorSurvPlotOS(tumor = tumor, gender = "female", geneset = tempensgs) #NO
+
+fun_TumorSurvPlotDS(tumor = tumor, geneset = tempensgs)
+fun_TumorSurvPlotDS(tumor = tumor, gender = "male", geneset = tempensgs)
+fun_TumorSurvPlotDS(tumor = tumor, gender = "female", geneset = tempensgs) #NO
+
+```
+
+
+
+```{r}
+
+```
+

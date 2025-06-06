@@ -343,7 +343,7 @@ fun_TumorSurvCoxOS = function(tumor = "all",
   out
 }
 
-fun_TumorSurvChisquareOS
+#fun_TumorSurvChisquareOS
 
 # survdf %<>% dplyr::select(eid, surv_time, surv_event, PTVb)
 # if(length(unique(survdf$PTVb)) == 1) {
