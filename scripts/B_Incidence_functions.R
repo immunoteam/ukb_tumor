@@ -10,7 +10,7 @@ fun_TumorIncForestPlot = function(tumor = "all",
                                   geneset = c("ENSG00000104804"), 
                                   ptv_burden_cat = TRUE, 
                                   gpca_nb = 10, 
-                                  dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                                  dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                                   ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   if(control == "nottumorous" & gender == "all") {
     control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
@@ -78,7 +78,7 @@ fun_TumorIncCoxModel = function(tumor = "all",
                                 geneset = c("ENSG00000104804"), 
                                 ptv_burden_cat = TRUE, 
                                 gpca_nb = 10, 
-                                dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                                dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                                 ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   if(control == "nottumorous" & gender == "all") {
     control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
@@ -142,7 +142,7 @@ fun_TumorIncFishTest = function(tumor = "all",
                                 gender = "all", 
                                 geneset = c("ENSG00000104804"), 
                                 ptv_burden_cat = TRUE, 
-                                dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                                dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                                 ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   if(control == "nottumorous" & gender == "all") {
     control_data = readRDS(paste0(dataset_dir, "nottumorous_all.rds"))
@@ -193,7 +193,7 @@ fun_TumorIncStat = function(tumor = "all",
                             gender = "all", 
                             geneset = c("ENSG00000104804"), 
                             ptv_burden_cat = TRUE, 
-                            dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                            dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                             ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(gender == "all") {
@@ -237,7 +237,7 @@ fun_TumorSurvPlotOS = function(tumor = "all",
                                gender = "all", 
                                geneset = c("ENSG00000104804"), 
                                ptv_burden_cat = TRUE, 
-                               dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                               dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                                ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -293,7 +293,7 @@ fun_TumorSurvCoxOS = function(tumor = "all",
                               geneset = c("ENSG00000104804"), 
                               ptv_burden_cat = TRUE, 
                               gpca_nb = 10, 
-                              dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                              dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                               ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -362,7 +362,7 @@ fun_TumorSurvForestOS = function(tumor = "all",
                                  geneset = c("ENSG00000104804"), 
                                  ptv_burden_cat = TRUE, 
                                  gpca_nb = 10, 
-                                 dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                                 dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                                  ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -420,7 +420,7 @@ fun_TumorSurvPlotDS = function(tumor = "all",
                                gender = "all", 
                                geneset = c("ENSG00000104804"), 
                                ptv_burden_cat = TRUE, 
-                               dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                               dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                                ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -476,7 +476,7 @@ fun_TumorSurvCoxDS = function(tumor = "all",
                               geneset = c("ENSG00000104804"), 
                               ptv_burden_cat = TRUE, 
                               gpca_nb = 10, 
-                              dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                              dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                               ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
@@ -547,7 +547,7 @@ fun_TumorSurvForestDS = function(tumor = "all",
                                  geneset = c("ENSG00000104804"), 
                                  ptv_burden_cat = TRUE, 
                                  gpca_nb = 10, 
-                                 dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/", 
+                                 dataset_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/", 
                                  ptv_dir = "/media/balazs/WorkL/balazs/Work/UKBiobank/PTVvars/") {
   tumor_data = bind_rows(lapply(tumor, function(tmr) {
     if(tmr == "all" & gender == "all") {
