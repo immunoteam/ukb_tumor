@@ -547,9 +547,12 @@ View(genesFreq[genesFreq$ENSEMBL == "ENSG00000104804",])
 
 ```{r}
 genesFreq = readRDS("Res/010/genesFreq_all_104.rds")
-res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+res_fishtest = readRDS("Res/010/res_fishtest_104.rds") #OR
+genesFreq = readRDS("Res/010/genesFreq_all_103.rds")
+res_fishtest = readRDS("Res/010/res_fishtest_103.rds")
 
 res_fishtest$ENTREZID = mapIds(org.Hs.eg.db, keys = res_fishtest$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
+genesFreq$ENTREZID = mapIds(org.Hs.eg.db, keys = genesFreq$ENSEMBL, keytype="ENSEMBL", column = "ENTREZID")
 
 res_fishtest %>% filter(Padj < 0.2) %>% pull(category) %>% table() %>% sort(decreasing = T) %>% View()
 t = "tumorous"
@@ -558,6 +561,14 @@ t = "Breast"
 t = "Colon_male"
 t = "Prostate"
 t = "Lung"
+t = "Lung_male"
+
+ggo_bp <- groupGO(gene = res_fishtest$ENTREZID[res_fishtest$OR > 1 & res_fishtest$category == t],
+               OrgDb = org.Hs.eg.db,
+               ont = "BP",
+               level = 2,
+               readable = TRUE)
+View(head(ggo_bp, 100))
 
 ggo <- groupGO(gene = res_fishtest$ENTREZID[res_fishtest$OR > 1 & res_fishtest$Padj < .2 & res_fishtest$category == t],
                OrgDb = org.Hs.eg.db,
@@ -570,6 +581,16 @@ ggo@result %>% View()
 
 #pvalueCutoff = 0.01
 #qvalueCutoff = 0.05
+ego <- enrichGO(gene = res_fishtest$ENTREZID[res_fishtest$OR > 1 & res_fishtest$category == t],
+                universe = genesFreq$ENTREZID,
+                OrgDb = org.Hs.eg.db,
+                ont = "ALL",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.2,
+                qvalueCutoff = 0.2,
+                readable = TRUE)
+View(head(ego,100))
+
 ego <- enrichGO(gene = res_fishtest$ENTREZID[res_fishtest$OR > 1 & res_fishtest$Padj < .2 & res_fishtest$category == t],
                 universe = genesFreq12$ENTREZID,
                 OrgDb = org.Hs.eg.db,

@@ -3,6 +3,9 @@ title: "B_023_Synonimuos_mutations"
 output: html_document
 date: "2025-04-08"
 ---
+
+#Setup
+
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
 # if (!require("BiocManager", quietly = TRUE))
@@ -96,5 +99,48 @@ myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("synb", sel_gpcas
 res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
 summary(res.cox)
 forest_model(res.cox)
+```
+
+#Syn burden MAF 10-4 for FRANCO geneset
+
+```{r}
+load("Objects/017/gsea_c7_genesets")
+franco_ensgs = geneSetsENS[["FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"]]
+
+synburden = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/Synonymous/10_4/SynonymousBurden.tsv")
+tempdf = sapply(franco_ensgs, function(x) stri_detect_fixed(synburden$Genes, x))
+synburden$synb_MAF104_Franco = rowsums(tempdf)
+table(synburden$synb_MAF104_Franco)
+
+
+```
+
+##Cox model
+
+```{r}
+control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/nottumorous_male.rds")
+m = max(control_data$date_of_death, na.rm = T)
+control_data %<>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(m - birthdate)
+  )) %>% 
+  mutate(status = 0)
+tumor_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/000_Sub_datasets/Lung_male.rds")
+tumor_data %<>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 1)
+ukb = rbind(tumor_data, control_data)
+ukb$synb = synburden$synb_MAF104_Franco[fmatch(ukb$eid, synburden$Patient.ID)]
+
+sel_gpcas = paste0("gpca", 1:10)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("synb", sel_gpcas), collapse = "+")))
+res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+summary(res.cox)
+forest_model(res.cox)
+table(ukb$synb, ukb$status)
+fisher.test(table(ukb$synb>0, ukb$status))
 ```
 

@@ -9,7 +9,7 @@ date: "2025-02-07"
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
 #library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("tidyverse", "data.table", "magrittr", "clusterProfiler", "org.Hs.eg.db", "hgnc", "future.apply", "fastmatch", "survival", "pbapply", "forestmodel", "gridExtra", "ggpubr", "rvest")
+Packages <- c("tidyverse", "data.table", "magrittr", "clusterProfiler", "org.Hs.eg.db", "hgnc", "future.apply", "fastmatch", "survival", "pbapply", "forestmodel", "gridExtra", "ggpubr", "rvest", "tictoc")
 #"Rfast", , , , , "tidycmprsk", , "survminer", "ggsurvfit", , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", , )
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
@@ -469,3 +469,69 @@ res %>%
   facet_wrap(~ptv_type)
 
 ```
+
+#MAF10-3
+##Calculate PTV burden
+
+```{r}
+load("Objects/017/gsea_c7_genesets")
+ptvb_MAF103 = fread("PTVvars/dl_20250331/MAF_10-3/PTVBurden_with_Shetscores.tsv")
+ptvb_MAF103 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+
+ukb_ptvENSG = as.list(ptvb_MAF103$ptvgenes)
+ukb_ptvENSG = lapply(ukb_ptvENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
+names(ukb_ptvENSG) = ptvb_MAF103$eid
+rm(ptvb_MAF103)
+
+plan(multisession(workers = 4))
+for(i in 2:length(geneSetsENS)) {
+  print(i)
+  tempensgs = geneSetsENS[[i]]
+  ptv_data = unname(future_sapply(ukb_ptvENSG, function(u) {
+    sum(u %fin% tempensgs)
+  }))
+  saveRDS(ptv_data, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/", i, "_", names(geneSetsENS)[i], ".rds"))
+}
+rm(i, ptv_data, tempensgs)
+gc()
+
+```
+
+##Cox models
+
+```{r}
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/tumor_freq_data")
+ptvb_MAF103 = fread("PTVvars/dl_20250331/MAF_10-3/PTVBurden_with_Shetscores.tsv")
+ptv_dataDF = data.frame(eid = ptvb_MAF103$Patient.ID)
+rm(ptvb_MAF103)
+
+gseaID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/")
+gseaID = gsub(".rds", "", gseaID)
+
+plan(multisession(workers = 12))
+
+for(i in 1:length(gseaID)) {
+  print(paste(i, Sys.time(), sep = "-"))
+  ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/", gseaID[i], ".rds"))
+  ptv_dataDF$PTV = ptv_data
+  coxres = t(future_sapply(tumor_freq_data$TS, function(ts) {
+    ukb = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts, ".rds"))
+    ukb %<>% left_join(ptv_dataDF, by = "eid")
+    summary(coxph(Surv(time, status) ~ PTV + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = ukb, id = ukb$eid))$coefficients["PTV",c("exp(coef)","Pr(>|z|)")]
+  }))
+  colnames(coxres) = c("coefPTV", "pPTVG")
+  saveRDS(coxres, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Res/017/coxres_MAF103/", gseaID[i], ".rds"))
+  gc()
+}
+rm(coxres, out, i, ptv_data)
+
+tic()
+ukb = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts[3], ".rds"))
+toc()
+
+tic()
+ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/", gseaID[i], ".rds"))
+toc()
+
+```
+

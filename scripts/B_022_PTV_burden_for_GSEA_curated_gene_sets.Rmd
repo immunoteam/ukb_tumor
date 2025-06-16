@@ -376,4 +376,31 @@ draw(hm)
 dev.off()
 ```
 
+#MAF 10-3 filtering - not ready!!!!!!!!!!
+##Calculate PTV burden
+
+```{r}
+load("Objects/022/gsea_c2_genesets")
+ptvb_MAF103 = fread("PTVvars/dl_20250331/MAF_10-3/PTVBurden_with_Shetscores.tsv")
+ptvb_MAF103 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+
+ukb_ptvENSG = as.list(ptvb_MAF103$ptvgenes)
+ukb_ptvENSG = lapply(ukb_ptvENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
+names(ukb_ptvENSG) = ptvb_MAF103$eid
+rm(ptvb_MAF103)
+
+files_ready = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/022/PTV_GSEA_MAF103/")
+plan(multisession(workers = 4))
+for(i in 1:length(gsea_c2_ensgs)) {
+  print(i)
+  tempensgs = gsea_c2_ensgs[[i]]
+  ptv_data = unname(future_sapply(ukb_ptvENSG, function(u) {
+    sum(u %fin% tempensgs)
+  }))
+  saveRDS(object = ptv_data, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/022/PTV_GSEA/", i, "_", names(gsea_c2_ensgs)[i], ".rds"))
+}
+rm(i, ptv_data, tempensgs)
+gc()
+
+```
 
