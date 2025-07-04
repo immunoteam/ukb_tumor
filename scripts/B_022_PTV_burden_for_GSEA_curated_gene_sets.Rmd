@@ -402,5 +402,41 @@ for(i in 1:length(gsea_c2_ensgs)) {
 rm(i, ptv_data, tempensgs)
 gc()
 
+readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/022/PTV_GSEA/1_ABBUD_LIF_SIGNALING_1_DN.rds") -> test
+```
+
+##Incidence Cox models
+
+```{r}
+load("Objects/tumor_freq_data")
+load("Objects/022/gsea_c2_genesets")
+
+future_sapply(1:length(gsIDs), function(i) {
+  ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/022/PTV_GSEA_MAF103/", i, "_", gsIDs[i], ".rds"))
+  names(ptv_data) = eids
+  coxres = future_sapply(tumor_freq_data$TS, function(ts) {
+    #j=j+1
+    #.GlobalEnv$j = j
+    ukb = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/022/dfs/", ts, ".rds"))
+    ukb$PTV = ptv_data[fmatch(ukb$eid, names(ptv_data))]
+    ukb$PTVG = ifelse(ukb$PTV == 0, 0, 1)
+    if(ukb %>% filter(status == 1, PTVG == 1) %>% nrow() > 0) {
+      ukb$PTVG = as.factor(ukb$PTVG)
+      myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("PTVG", sel_gpcas), collapse = "+")))
+      res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+      out = summary(res.cox)$coefficients[grep("PTV", rownames(summary(res.cox)$coefficients), value = T),c("exp(coef)","Pr(>|z|)")]
+    } else {
+      out = c(NA, NA)
+    }
+    c(ukb %>% filter(status == 1, PTVG == 1) %>% nrow(),
+      ukb %>% filter(status == 1, PTVG == 0) %>% nrow(),
+      ukb %>% filter(status == 0, PTVG == 1) %>% nrow(),
+      ukb %>% filter(status == 0, PTVG == 0) %>% nrow(),
+      out)
+  })
+  outp = cbind(tumor_freq_data, ptv_type = gsIDs[i], t(coxres))
+  colnames(outp)[6:11] = c("case1", "case0", "control1", "control0", "HR", "P")
+  saveRDS(outp, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/022/coxres_MAF103/", i, "_", gsIDs[i], ".rds"))
+})
 ```
 

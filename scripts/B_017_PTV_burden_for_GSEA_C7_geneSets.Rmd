@@ -33,8 +33,8 @@ names(geneSets) = gseaGeneSetsID
 geneSetsENS = lapply(geneSets, function(x) geneIDmatch$ENSEMBL[fmatch(x, geneIDmatch$SYMBOL)])
 names(geneSetsENS) = gseaGeneSetsID
 
-save(geneSets, geneSetsENS, file = "Objects/017/gsea_c7_genesets")
-load("Objects/017/gsea_c7_genesets")
+save(geneSets, geneSetsENS, file = "objects/017/gsea_c7_genesets")
+load("objects/017/gsea_c7_genesets")
 table(lengths(geneSets))
 ```
 
@@ -56,7 +56,7 @@ for(i in 1:length(geneSetsENS)) {
   ptv_data = unname(future_sapply(ukb_ptvENSG, function(u) {
     sum(u %fin% tempensgs)
   }))
-  saveRDS(object = ptv_data, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA/", i, "_", names(geneSetsENS)[i], ".rds"))
+  saveRDS(object = ptv_data, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/017/PTV_GSEA_MAF104/", i, "_", names(geneSetsENS)[i], ".rds"))
 }
 rm(i, ptv_data, tempensgs)
 gc()
@@ -66,12 +66,12 @@ gc()
 #Cox models
 
 ```{r}
-load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/tumor_freq_data")
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/014/tumor_freq_data")
 ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
 ptv_dataDF = data.frame(eid = ptvb_MAF104$Patient.ID)
 rm(ptvb_MAF104)
 
-gseaID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA/")
+gseaID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/017/PTV_GSEA_MAF104/")
 gseaID = gsub(".rds", "", gseaID)
 sel_gpcas = paste0("gpca", 1:20)
 
@@ -79,10 +79,10 @@ plan(multisession(workers = 8))
 
 for(i in 1:length(gseaID)) {
   print(paste0(i, "_", Sys.time()))
-  ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA/", gseaID[i], ".rds"))
+  ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/017/PTV_GSEA_MAF104/", gseaID[i], ".rds"))
   ptv_dataDF$PTV = ptv_data
   coxres = future_apply(tumor_freq_data, 1, function(ts) {
-    tempdfU = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts[3], ".rds"))
+    tempdfU = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/014/dfs/", ts[3], ".rds"))
     ukb = tempdfU %>% left_join(ptv_dataDF, by = "eid")
     ukb$PTVG = ifelse(ukb$PTV == 0, 0, 1)
     if(length(unique(ukb$PTVG)) > 1) {ukb$PTVG = as.factor(ukb$PTVG)}
@@ -94,7 +94,7 @@ for(i in 1:length(gseaID)) {
   colnames(out)[seq(6,ncol(out),2)] = c("coefPTV", paste0("coef_gpca", 1:20))
   colnames(out)[seq(7,ncol(out),2)] = c("pPTVG", paste0("p_gpca", 1:20))
   out$padjPTVG = p.adjust(out$pPTVG, method = "fdr")
-  saveRDS(object = out, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/coxres/", gseaID[i], ".rds"))
+  saveRDS(object = out, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/res/017/coxres_MAF104/", gseaID[i], ".rds"))
   gc()
 }
 rm(coxres, out, i, ptv_data)
@@ -104,11 +104,11 @@ rm(coxres, out, i, ptv_data)
 #Results
 
 ```{r}
-load("Objects/017/gsea_c7_genesets")
-gseaGeneSetsID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/coxres/")
+load("objects/017/gsea_c7_genesets")
+gseaGeneSetsID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/res/017/coxres_MAF104/")
 gseaGeneSetsID = gsub(".rds", "", gseaGeneSetsID)
 res = bind_rows(lapply(1:length(gseaGeneSetsID), function(i) {
-  dat = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/coxres/", gseaGeneSetsID[i], ".rds"))
+  dat = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/res/017/coxres_MAF104/", gseaGeneSetsID[i], ".rds"))
   dat
 }))
 res$gseaInd = as.character(sapply(res$ptv_type, function(x) strsplit(x, "_")[[1]][1]))
@@ -117,7 +117,7 @@ res$genesHugo = sapply(res$gseaInd, function(x) paste0(geneSets[[as.numeric(x)]]
 res$genesENS = sapply(res$gseaInd, function(x) paste0(geneSetsENS[[as.numeric(x)]], collapse = ";"))
 res$gseaInd = as.numeric(res$gseaInd)
 
-saveRDS(res, file = "Res/017/res_gsea_c7.rds")
+saveRDS(res, file = "res/017/res_gsea_c7_MAF104.rds")
 #genesFreq = readRDS("Res/010/genesFreq_all_104.rds")
 
 
@@ -127,7 +127,7 @@ saveRDS(res, file = "Res/017/res_gsea_c7.rds")
 
 ```{r}
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
-res = readRDS("Res/017/res_gsea_c7.rds")
+res = readRDS("res/017/res_gsea_c7_MAF104.rds")
 genes = res %>% 
   arrange(pPTVG) %>% 
   filter(coefPTV > 1) %>% 
@@ -158,7 +158,7 @@ plots = lapply(gse_terms, function(g) {
 })
 
 ggsave(
-  filename = "Plots/017/Melanoma_Common_Hits_pLowerThan02_coefHigherThan1.pdf", 
+  filename = "plots/017/Melanoma_Common_Hits_pLowerThan02_coefHigherThan1.pdf", 
   plot = marrangeGrob(plots, nrow = 1, ncol = 1), 
   width = 15, height = 9
 )
@@ -169,7 +169,7 @@ ggsave(
 
 ```{r}
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
-res = readRDS("Res/017/res_gsea_c7.rds")
+res = readRDS("res/017/res_gsea_c7_MAF104.rds")
 
 resF = res %>% 
   filter(pPTVG < 0.1) %>%
@@ -210,7 +210,7 @@ plots_all = future_lapply(gse_terms, function(g) {
 })
 
 ggsave(
-  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/017/Hot_vs_cold_tumors_28terms.pdf", 
+  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/plots/017/Hot_vs_cold_tumors_28terms.pdf", 
   plot = marrangeGrob(plots_all, nrow=1, ncol=1), 
   width = 15, height = 9
 )
@@ -230,7 +230,7 @@ plots_all_2 = future_lapply(gse_terms, function(g) {
 })
 
 ggsave(
-  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/017/Hot_vs_cold_tumors_28terms_sep.pdf", 
+  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/plots/017/Hot_vs_cold_tumors_28terms_sep.pdf", 
   plot = marrangeGrob(plots_all_2, nrow=1, ncol=1), 
   width = 29, height = 21
 )
@@ -268,8 +268,8 @@ colnames(tdf) = c("hot_coxHR", "hot_coxP", "cold_coxHR", "cold_coxP")
 gse_terms_data = cbind.data.frame(gse_terms_data, tdf)
 rownames(gse_terms_data) = NULL
 
-saveRDS(gse_terms_data, file = "Res/017/gse_terms_data_hot_vs_cold.rds")
-saveRDS(gse_terms_gene_data, file = "Res/017/gse_terms_gene_data.rds")
+saveRDS(gse_terms_data, file = "res/017/gse_terms_data_hot_vs_cold.rds")
+saveRDS(gse_terms_gene_data, file = "res/017/gse_terms_gene_data.rds")
 ```
 
 ###FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE
@@ -281,12 +281,12 @@ Supplementary table contains genes (Table 3), filter to Day (14) and Max Pearson
 ```{r}
 #suppl_table = read_excel("Literature/Franco_Sanofi_article/elife-00299-supp1-v2.xlsx", sheet = 4, skip = 2)
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
-res = readRDS("Res/017/res_gsea_c7.rds")
+res = readRDS("res/017/res_gsea_c7_MAF104.rds")
 
 FRANCOensgs = unlist(strsplit(res$genesENS[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";"))
 FRANCOsymbols = unlist(strsplit(res$genesHugo[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";"))
 
-res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+res_fishtest = readRDS("res/010/res_fishtest_104.rds")
 res_fishtest %>% filter(SYMBOL %in% FRANCOsymbols) %>% filter(category %in% "Lung") %>% View()
 
 fun_TumorIncCoxModel(tumor = "Lung", gender = "all", geneset = FRANCOensgs)
@@ -297,7 +297,7 @@ fun_TumorSurvPlotDS(tumor = "Lung", gender = "female", geneset = FRANCOensgs)
 fun_TumorSurvPlotOS(tumor = "Lung", gender = "male", geneset = FRANCOensgs)
 
 ggarrange(plotlist = list(fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = FRANCOensgs), fun_TumorSurvPlotDS(tumor = "Lung", gender = "male", geneset = FRANCOensgs)), ncol = 2)
-ggsave("Plots/017/FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_Lung_Male_Incidence_DSS_Survival.jpg", width = 50, height = 25, units = "cm", dpi = 300)
+ggsave("plots/017/FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_Lung_Male_Incidence_DSS_Survival.jpg", width = 50, height = 25, units = "cm", dpi = 300)
 
 
 res_MISS1gene = cbind.data.frame(SYMBOL = FRANCOsymbols, ENSG = FRANCOensgs, t(future_sapply(FRANCOensgs, function(ensg) {
@@ -311,14 +311,14 @@ res_MISS2genes = cbind.data.frame(subsets2, t(future_apply(subsets2, 1, function
   g = dplyr::setdiff(FRANCOensgs, x)
   fun_TumorIncCoxModel(tumor = "Lung", gender = "male", geneset = g)
 })))
-save(res_MISS1gene, res_MISS2genes, file = "Res/017/res_missed_gene_analysis_FRANCO_Lung_male")
+save(res_MISS1gene, res_MISS2genes, file = "res/017/res_missed_gene_analysis_FRANCO_Lung_male")
 
 plots_inc_miss1gene = ggarrange(plotlist = future_lapply(FRANCOensgs, function(ensg) {
   g = dplyr::setdiff(FRANCOensgs, ensg)
   fun_TumorIncForestPlot(tumor = "Lung", gender = "male", geneset = g)
 }), ncol = 6, nrow = 4)
 
-load("Res/017/res_missed_gene_analysis_FRANCO_Lung_male")
+load("res/017/res_missed_gene_analysis_FRANCO_Lung_male")
 ```
 
 ####Bladder, male
@@ -352,7 +352,7 @@ hugo_symbols2[!hugo_symbols2 %in% gene_match2$SYMBOL]
 
 ensgs = unique(gene_match2$ENSEMBL)
 
-load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/tumor_freq_data")
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/tumor_freq_data")
 plan(multisession(workers = 4))
 pl_list_tumors = lapply(tumor_freq_data$TS, function(ts) {fun_TumorIncForestPlot(tumor = strsplit(ts, "_")[[1]][1], gender = strsplit(ts, "_")[[1]][2], geneset = ensgs)})
 fig = ggarrange(plotlist = pl_list_tumors, ncol = 11, nrow = 4)
@@ -365,7 +365,7 @@ coxHRP = cbind.data.frame(TS = tumor_freq_data$TS, coxHRP)
 
 ```{r}
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
-res = readRDS("Res/017/res_gsea_c7.rds")
+res = readRDS("res/017/res_gsea_c7_MAF104.rds")
 
 resF = res %>% 
   filter(pPTVG < 0.2) %>%
@@ -403,7 +403,7 @@ plots_all = future_lapply(gse_terms, function(g) {
 })
 
 ggsave(
-  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/017/Hot2_vs_cold_tumors_13terms.pdf", 
+  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/plots/017/Hot2_vs_cold_tumors_13terms.pdf", 
   plot = marrangeGrob(plots_all, nrow=1, ncol=1), 
   width = 15, height = 9
 )
@@ -423,7 +423,7 @@ plots_all_2 = future_lapply(gse_terms, function(g) {
 })
 
 ggsave(
-  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/Plots/017/Hot2_vs_cold_tumors_13terms_sep.pdf", 
+  filename = "/media/balazs/WorkL/balazs/Work/UKBiobank/plots/017/Hot2_vs_cold_tumors_13terms_sep.pdf", 
   plot = marrangeGrob(plots_all_2, nrow=1, ncol=1), 
   width = 29, height = 21
 )
@@ -434,7 +434,7 @@ ggsave(
 
 ```{r}
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
-res = readRDS("Res/017/res_gsea_c7.rds")
+res = readRDS("res/017/res_gsea_c7_MAF104.rds")
 
 resF = res %>% filter(pPTVG < 0.1)
 gseTermsF = unique(resF$ptv_type)
@@ -474,7 +474,7 @@ res %>%
 ##Calculate PTV burden
 
 ```{r}
-load("Objects/017/gsea_c7_genesets")
+load("objects/017/gsea_c7_genesets")
 ptvb_MAF103 = fread("PTVvars/dl_20250331/MAF_10-3/PTVBurden_with_Shetscores.tsv")
 ptvb_MAF103 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
 
@@ -490,7 +490,7 @@ for(i in 2:length(geneSetsENS)) {
   ptv_data = unname(future_sapply(ukb_ptvENSG, function(u) {
     sum(u %fin% tempensgs)
   }))
-  saveRDS(ptv_data, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/", i, "_", names(geneSetsENS)[i], ".rds"))
+  saveRDS(ptv_data, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/017/PTV_GSEA_MAF103/", i, "_", names(geneSetsENS)[i], ".rds"))
 }
 rm(i, ptv_data, tempensgs)
 gc()
@@ -500,38 +500,67 @@ gc()
 ##Cox models
 
 ```{r}
-load("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/tumor_freq_data")
+load("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/014/tumor_freq_data")
 ptvb_MAF103 = fread("PTVvars/dl_20250331/MAF_10-3/PTVBurden_with_Shetscores.tsv")
 ptv_dataDF = data.frame(eid = ptvb_MAF103$Patient.ID)
 rm(ptvb_MAF103)
 
-gseaID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/")
+gseaID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/017/PTV_GSEA_MAF103/")
 gseaID = gsub(".rds", "", gseaID)
 
 plan(multisession(workers = 12))
 
 for(i in 1:length(gseaID)) {
   print(paste(i, Sys.time(), sep = "-"))
-  ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/", gseaID[i], ".rds"))
+  ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/017/PTV_GSEA_MAF103/", gseaID[i], ".rds"))
   ptv_dataDF$PTV = ptv_data
   coxres = t(future_sapply(tumor_freq_data$TS, function(ts) {
-    ukb = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts, ".rds"))
+    ukb = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/014/dfs/", ts, ".rds"))
     ukb %<>% left_join(ptv_dataDF, by = "eid")
     summary(coxph(Surv(time, status) ~ PTV + gpca1 + gpca2 + gpca3 + gpca4 + gpca5 + gpca6 + gpca7 + gpca8 + gpca9 + gpca10, data = ukb, id = ukb$eid))$coefficients["PTV",c("exp(coef)","Pr(>|z|)")]
   }))
   colnames(coxres) = c("coefPTV", "pPTVG")
-  saveRDS(coxres, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Res/017/coxres_MAF103/", gseaID[i], ".rds"))
+  saveRDS(coxres, file = paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/res/017/coxres_MAF103/", gseaID[i], ".rds"))
   gc()
 }
 rm(coxres, out, i, ptv_data)
 
-tic()
-ukb = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/014/dfs/", ts[3], ".rds"))
-toc()
-
-tic()
-ptv_data = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/Objects/017/PTV_GSEA_MAF103/", gseaID[i], ".rds"))
-toc()
-
 ```
 
+##Results
+
+```{r}
+load("objects/017/gsea_c7_genesets")
+gseaGeneSetsID = list.files("/media/balazs/WorkL/balazs/Work/UKBiobank/res/017/coxres_MAF103/")
+gseaGeneSetsID = gsub(".rds", "", gseaGeneSetsID)
+res = lapply(1:length(gseaGeneSetsID), function(i) {
+  dat = readRDS(paste0("/media/balazs/WorkL/balazs/Work/UKBiobank/res/017/coxres_MAF103/", gseaGeneSetsID[i], ".rds"))
+  dat %>% 
+    as.data.frame() %>% 
+    rownames_to_column(var = "TS") %>%
+    mutate(ptv_type = gseaGeneSetsID[i], .after = TS)
+})
+res = do.call(rbind, res)
+res$gseaInd = as.character(sapply(res$ptv_type, function(x) strsplit(x, "_")[[1]][1]))
+
+res$genesHugo = sapply(res$gseaInd, function(x) paste0(geneSets[[as.numeric(x)]], collapse = ";"))
+res$genesENS = sapply(res$gseaInd, function(x) paste0(geneSetsENS[[as.numeric(x)]], collapse = ";"))
+res$gseaInd = as.numeric(res$gseaInd)
+
+saveRDS(res, file = "res/017/res_gsea_c7_MAF103.rds")
+
+#ALl tumors
+resF = res %>% filter(pPTVG < 0.1)
+gseTermsF = unique(resF$ptv_type)
+plan(multisession(workers = 8))
+compDF = t(future_sapply(gseTermsF, function(x) {
+  c(resF %>% filter(ptv_type == x, coefPTV > 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, coefPTV > 1, pPTVG < 0.05) %>% nrow(),
+    resF %>% filter(ptv_type == x, coefPTV < 1) %>% nrow(),
+    resF %>% filter(ptv_type == x, coefPTV < 1, pPTVG < 0.05) %>% nrow())
+}))
+colnames(compDF) = c("over_01", "over_005", "under_01", "under_005")
+compDF = cbind.data.frame(id = gseTermsF, compDF)
+
+
+```

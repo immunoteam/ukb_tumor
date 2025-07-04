@@ -24,13 +24,13 @@ source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
 plan(multisession(workers = 4))
 ```
 
-#PTV burden
+#Gene sets
 
 ```{r}
-res = readRDS("Res/017/res_gsea_c7.rds")
+res = readRDS("res/017/res_gsea_c7_MAF104.rds")
 FRANCOensgs = unlist(strsplit(res$genesENS[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";"))
 gene_match_franco = data.frame(SYMBOL = unlist(strsplit(res$genesHugo[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")), ENSEMBL = unlist(strsplit(res$genesENS[res$ptv_type == "55_FRANCO_BLOOD_SANOFI_PASTEUR_SA_INACTIVATED_INFLUENZA_VACCINE_CORRELATED_WITH_ANTIBODY_RESPONSE_AGE_18_40YO_14DY_POSITIVE"][1], ";")))
-saveRDS(gene_match_franco, file = "Objects/025/FRANCO_influvac_genes.rds")
+saveRDS(gene_match_franco, file = "objects/025/FRANCO_influvac_genes.rds")
 rm(res)
 
 c("ZBTB46", "PIWIL1", "B4GALT4-AS1", "CRYGEP, RPL12P17", "NBAS", "KCNMA1", "ARHGAP26", "HECW2", "ERICH6, SELENOT", "PMP22, TEKT3", "EMP1, LINC01559", "OSBPL3, CYCS", "MRPS21P6, RPS27P18", "HNRNPA3P8, HYDINP1")
@@ -49,8 +49,16 @@ gwas$reported_trait[gwas$SYMBOL %in% c("PMP22", "TEKT3")] = "T cell lymphocyte p
 gwas$reported_trait[gwas$SYMBOL == "PIWIL1"] = "B cell lymphocyte profile difference (1 day post influenza vaccination)"
 gwas$reported_trait[gwas$SYMBOL == "ZBTB46"] = "Response to influenza vaccine"
 
-saveRDS(gwas, file = "Objects/025/GWAS_influvac_genes.rds")
+saveRDS(gwas, file = "objects/025/GWAS_influvac_genes.rds")
 
+```
+
+
+#PTV burdens
+
+```{r}
+franco = readRDS("objects/025/FRANCO_influvac_genes.rds")
+gwas = readRDS("objects/025/GWAS_influvac_genes.rds")
 
 ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
 ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
@@ -60,15 +68,57 @@ ukb_ptvENSG = lapply(ukb_ptvENSG, function(x) unique(unlist(strsplit(x, ","), us
 names(ukb_ptvENSG) = ptvb_MAF104$eid
 rm(ptvb_MAF104)
 
-tempensgs = c(FRANCOensgs, gwas$ENSEMBL)
+genelists = list(
+  GWAS = gwas$ENSEMBL,
+  GWAS_Tcell90 = gwas$ENSEMBL[gwas$reported_trait == "T cell lymphocyte profile difference (90 days post influenza vaccination)"],
+  GWAS_Bcell7 = gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"],
+  FRANCO_GWAS_46genes = c(franco$ENSEMBL, gwas$ENSEMBL),
+  FRANCO_GWAS_Tcell90 = c(franco$ENSEMBL, gwas$ENSEMBL[gwas$reported_trait == "T cell lymphocyte profile difference (90 days post influenza vaccination)"]),
+  FRANCO_GWAS_Bcell7 = c(franco$ENSEMBL, gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"]))
 
-ptv_data = future_sapply(ukb_ptvENSG, function(u) {
-  sum(u %fin% tempensgs)
+
+sapply(1:length(genelists), function(i) {
+  ptv_data = future_sapply(ukb_ptvENSG, function(u) {
+    sum(u %fin% genelists[[i]])
+  })
+  saveRDS(ptv_data, file = paste0("objects/025/ptvb_", names(genelists)[i], ".rds"))
 })
-table(ptv_data)
-saveRDS(ptv_data, file = "Objects/025/ptvb_FRANCO_GWAS.rds")
 
 ```
+
+#Synonymous burdens
+
+```{r}
+franco = readRDS("objects/025/FRANCO_influvac_genes.rds")
+gwas = readRDS("objects/025/GWAS_influvac_genes.rds")
+
+synburden = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/Synonymous/10_4/SynonymousBurden.tsv")
+synburden %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "genes"))
+
+ukb_synENSG = as.list(synburden$genes)
+ukb_synENSG = lapply(ukb_synENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
+names(ukb_synENSG) = synburden$eid
+rm(synburden)
+
+genelists = list(
+  GWAS = gwas$ENSEMBL,
+  GWAS_Tcell90 = gwas$ENSEMBL[gwas$reported_trait == "T cell lymphocyte profile difference (90 days post influenza vaccination)"],
+  GWAS_Bcell7 = gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"],
+  FRANCO_GWAS_46genes = c(franco$ENSEMBL, gwas$ENSEMBL),
+  FRANCO_GWAS_Tcell90 = c(franco$ENSEMBL, gwas$ENSEMBL[gwas$reported_trait == "T cell lymphocyte profile difference (90 days post influenza vaccination)"]),
+  FRANCO_GWAS_Bcell7 = c(franco$ENSEMBL, gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"]))
+
+plan(multisession(workers = 4))
+future_sapply(1:length(genelists), function(i) {
+  synb_data = future_sapply(ukb_synENSG, function(u) {
+    sum(u %fin% genelists[[i]])
+  })
+  saveRDS(synb_data, file = paste0("objects/025/synb_", names(genelists)[i], ".rds"))
+})
+
+```
+
+
 
 #Incidence, survival
 
@@ -76,28 +126,61 @@ saveRDS(ptv_data, file = "Objects/025/ptvb_FRANCO_GWAS.rds")
 #res = readRDS("Res/017/res_gsea_c7.rds")
 
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
-franco = readRDS("Objects/025/FRANCO_influvac_genes.rds")
-gwas = readRDS("Objects/025/GWAS_influvac_genes.rds")
-res_fishtest = readRDS("Res/010/res_fishtest_104.rds")
+franco = readRDS("objects/025/FRANCO_influvac_genes.rds")
+gwas = readRDS("objects/025/GWAS_influvac_genes.rds")
+# res_fishtest = readRDS("res/010/res_fishtest_104.rds")
+# res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL | SYMBOL %in% gwas$SYMBOL) %>% filter(category == "Lung_male") %>% arrange(desc(OR)) %>% left_join(gwas, by = "ENSEMBL") %>% View()
+# res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL | SYMBOL %in% gwas$SYMBOL) %>% filter(category == "Lung_male") %>% arrange(desc(OR)) %>% left_join(gwas, by = "ENSEMBL") %>% View()
+# res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL[grepl("B cell lymphocyte profile", gwas$reported_trait)], category == "Lung_male") %>% left_join(gwas, by = "ENSEMBL") %>% View() #5 genes show good trend, 
+# res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"], category == "Lung_male") %>% left_join(gwas, by = "ENSEMBL") %>% View()
+# gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"] #6
 
-res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL | SYMBOL %in% gwas$SYMBOL) %>% filter(category == "Lung_male") %>% arrange(desc(OR)) %>% left_join(gwas, by = "ENSEMBL") %>% View()
-res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL | SYMBOL %in% gwas$SYMBOL) %>% filter(category == "Lung_male") %>% arrange(desc(OR)) %>% left_join(gwas, by = "ENSEMBL") %>% View()
+gwas %>% group_by(reported_trait) %>% summarise(n = n()) %>% arrange(desc(n))
 
-res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL[grepl("B cell lymphocyte profile", gwas$reported_trait)], category == "Lung_male") %>% left_join(gwas, by = "ENSEMBL") %>% View() #5 genes show good trend, 
-res_fishtest %>% filter(ENSEMBL %in% gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"], category == "Lung_male") %>% left_join(gwas, by = "ENSEMBL") %>% View()
-gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"] #6
+tblForIncStat = expand.grid(gw_ds = c("NO", "YES", "B_cell_7", "T_cell_90"), fr_ds = c("NO", "YES"), cancer = c("Lung", "Bladder"), gender = c("all", "female", "male"), stringsAsFactors = F)
+tblForIncStat %<>% filter(!(gw_ds == "NO" & fr_ds == "NO"))
 
+plan(multisession(workers = 4))
+res = future_apply(tblForIncStat, 1, function(x) {
+  if(x[1] == "NO") {
+    gwasgenes = NULL
+  } else if(x[1] == "YES") {
+    gwasgenes = gwas$ENSEMBL
+  } else if(x[1] == "B_cell_7") {
+    gwasgenes = gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"]
+  } else if(x[1] == "T_cell_90") {
+    gwasgenes = gwas$ENSEMBL[gwas$reported_trait == "T cell lymphocyte profile difference (90 days post influenza vaccination)"]
+  }
+  if(x[2] == "NO") {
+    francogenes = NULL
+  } else if(x[2] == "YES") {
+    francogenes = franco$ENSEMBL
+  }
+  genes = c(gwasgenes, francogenes)
+  fun_TumorIncCoxModel(tumor = x[3], gender = x[4], geneset = genes)
+})
+
+res = cbind(tblForIncStat, t(res))
+res$Pvalue = format(res$Pvalue, scientific = F)
+saveRDS(res, file = "objects/025/incidence_survival_FRANCO_GWAS_46genes.rds")
+
+##################################xxx
 
 tumor = "Lung"
 tumor = "Bladder"
 tumor = "Thyroid"
 tumor = "Multiplemyeloma"
 tumor = "Mesothelioma"
+tumor = "Kidney"
+tumor = c("Lung", "Bladder", "Kidney")
+tumor = c("Lung", "Bladder", "Kidney", "Thyroid")
+tumor = c("Lung", "Bladder", "Kidney", "Multiplemyeloma")
+tumor = c("Lung", "Bladder", "Kidney", "Thyroid", "Multiplemyeloma")
 
 tempensgs = franco$ENSEMBL
 tempensgs = gwas$ENSEMBL
-
 tempensgs = c(franco$ENSEMBL, gwas$ENSEMBL)
+
 tempensgs = gwas$ENSEMBL[gwas$SYMBOL %in% c("KCNMA1", "ERICH6", "HECW2", "NBAS", "ARHGAP26")]
 tempensgs = c(franco$ENSEMBL, gwas$ENSEMBL[gwas$SYMBOL %in% c("KCNMA1", "ERICH6", "HECW2", "NBAS", "ARHGAP26")])
 tempensgs = c(franco$ENSEMBL[!franco$SYMBOL %in% c("MLH1", "CD79A", "PRKAB2", "SWSAP1", "CD19", "LRP5L")], gwas$ENSEMBL[gwas$SYMBOL %in% c("KCNMA1", "ERICH6", "HECW2", "NBAS", "ARHGAP26")])
@@ -121,41 +204,49 @@ fun_TumorSurvPlotDS(tumor = tumor, gender = "female", geneset = tempensgs) #NO
 
 ```
 
-HR, P
-Both gender, lung:
-Franco: 1.658299e+00 4.019334e-05
-GWAS: 1.248765 0.321668
-BOTH geneset: 1.552473e+00 4.923834e-05
-
-Male, lung:
-Franco: 2.158683e+00 4.392221e-07
-GWAS: 1.348785 0.301419
-BOTH geneset: 1.927835e+00 1.255550e-06
-
-Female, lung:
-Franco: 1.1539583 0.4947589
-GWAS: 1.1220646 0.7451234
-BOTH geneset: 1.1520403 0.4342831
-
-
-Both gender, bladder:
-Franco: 1.55137207 0.03275136
-GWAS: 0.7877785 0.5943624
-BOTH geneset: 1.3357684 0.1223961
-
-Male, bladder:
-Franco: 1.75648240 0.01048295
-GWAS: 0.7937013 0.6445723
-BOTH geneset: 1.47932779 0.05262089
-
-
-Female, bladder:
-Franco: 0.8525283 0.7831865
-GWAS: 0.7644889 0.7885766
-BOTH geneset: 0.8310361 0.7128176
-
+#Incidence - syn burdens
 
 ```{r}
+source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
+franco = readRDS("objects/025/FRANCO_influvac_genes.rds")
+gwas = readRDS("objects/025/GWAS_influvac_genes.rds")
+
+
+control_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/nottumorous_male.rds")
+m = max(control_data$date_of_death, na.rm = T)
+control_data %<>% 
+  mutate(time = case_when(
+    death == T ~ as.numeric(date_of_death - birthdate),
+    death == F ~ as.numeric(m - birthdate)
+  )) %>% 
+  mutate(status = 0)
+tumor_data = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/000_Sub_datasets/Lung_male.rds")
+tumor_data %<>% 
+  arrange(diag_date) %>% 
+  distinct(eid, .keep_all = T) %>% 
+  mutate(time = as.numeric((diag_date - birthdate))) %>% 
+  mutate(status = 1)
+ukb = rbind(tumor_data, control_data)
+sel_gpcas = paste0("gpca", 1:10)
+myformula = as.formula(paste('Surv(time, status) ~ ', paste0(c("synb", sel_gpcas), collapse = "+")))
+
+plots = lapply(gsub(".rds", "", list.files("objects/025/", pattern = "synb_")), function(x) {
+  synb = readRDS(paste0("objects/025/", x, ".rds"))
+  ukb$synb = synb[fmatch(ukb$eid, names(synb))]
+  res.cox <- coxph(myformula, data = ukb, id = ukb$eid)
+  forest_model(res.cox) +  ggtitle(paste0("Cox model for ", x))
+})
+
+ggsave(
+  filename = "plots/025/synb_forest_plots_multiple_genesets.pdf", 
+  plot = marrangeGrob(plots, nrow = 1, ncol = 1), 
+  width = 15, height = 9
+)
+
+
+
+
+
 
 ```
 
