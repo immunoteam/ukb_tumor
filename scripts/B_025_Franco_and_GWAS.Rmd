@@ -9,7 +9,7 @@ date: "2025-06-06"
 ```{r}
 setwd("/media/balazs/WorkL/balazs/Work/UKBiobank/")
 #library(survival, lib.loc = "/home/balazs/R/x86_64-pc-linux-gnu-library/4.3")
-Packages <- c("tidyverse", "data.table", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "stringi", "forestmodel", "ggsurvfit")
+Packages <- c("tidyverse", "data.table", "magrittr", "future.apply", "fastmatch", "clusterProfiler", "org.Hs.eg.db", "stringi", "forestmodel", "ggsurvfit", "ggpubr", "forcats")
 #, "hgnc", , , "survival", "pbapply", , "gridExtra", "ggpubr", "rvest", "Rfast", , , , , "tidycmprsk", , "survminer", , , , "ComplexHeatmap", , , , "ggrepel", "ggsci", "scales", , "circlize" "fastmatch", "h2o", , , "protr", , , "networkD3", , , "Biostrings", ,
 lapply(Packages, require, character.only = TRUE)
 rm(Packages)
@@ -21,7 +21,7 @@ options(dplyr.summarise.inform = FALSE)
 # scales::show_col(pal_npg("nrc", alpha = 0.8)(9))
 options(future.globals.maxSize= 2147483648)
 source("/home/balazs/mygit/ukb_tumor/scripts/B_Incidence_functions.R")
-plan(multisession(workers = 4))
+#plan(multisession(workers = 4))
 ```
 
 #Gene sets
@@ -53,7 +53,6 @@ saveRDS(gwas, file = "objects/025/GWAS_influvac_genes.rds")
 
 ```
 
-
 #PTV burdens
 
 ```{r}
@@ -84,37 +83,74 @@ sapply(1:length(genelists), function(i) {
   saveRDS(ptv_data, file = paste0("objects/025/ptvb_", names(genelists)[i], ".rds"))
 })
 
+#Per genes
+franco = readRDS("objects/025/FRANCO_influvac_genes.rds")
+gwas = readRDS("objects/025/GWAS_influvac_genes.rds")
+ptvb_MAF104 = fread("PTVvars/MAF10_4_all_retained_variants_PTVBurden_final_Shetscores.tsv")
+ptvb_MAF104 %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "ptvgenes"))
+
+ensgs = c(franco$ENSEMBL, gwas$ENSEMBL)
+plan(multisession(workers = 4))
+temp = future_sapply(ensgs, function(e) {stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = e)})
+colSums(temp)
+
+
+
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000186810")]) #CXCR3, 0 patient
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000275051")]) #PIWIL1 - 0 patient, another ENS is good
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000125207")]) #PIWIL1, 180 patients
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000229150")]) #CRYGEP, 0 patient
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000290929")]) #CRYGEP, 0 patient
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000180861")]) #LINC01559
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000233135")]) #RPS27P18
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000239699")]) #HNRNPA3P8
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000242586")]) #HYDINP1
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000224839")]) #RPL12P17
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000214298")]) #MRPS21P6
+
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000121578")]) #B4GALT4, 71 patients
+length(ptvb_MAF104$eid[stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000240254")]) #B4GALT4-AS1, 1 patient
+
+
+franco_gwas_ptv = temp[,colSums(temp) > 0] #37 columns
+
+franco_gwas_ptv = cbind(franco_gwas_ptv, ENSG00000121578 = stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = "ENSG00000121578")) #add B4GALT4
+rownames(franco_gwas_ptv) = ptvb_MAF104$eid
+dim(franco_gwas_ptv)
+colSums(franco_gwas_ptv)
+franco_gwas_ptv = franco_gwas_ptv[,c(1:25,27:37,26,38)]
+saveRDS(franco_gwas_ptv, file = "objects/025/franco_gwas_ptv_eidmtx.rds")
+
+
+franco_gwas = rbind(cbind(geneset = "franco", franco, reported_trait = NA), cbind(geneset = "gwas", gwas))
+franco_gwas = rbind(franco_gwas, c("gwas", "B4GALT4", "ENSG00000121578", "B cell lymphocyte profile difference (7 days post influenza vaccination)"))
+franco_gwas$nPat = sapply(franco_gwas$ENSEMBL, function(e) sum(stri_detect_fixed(str = ptvb_MAF104$ptvgenes, pattern = e)))
+saveRDS(franco_gwas, file = "objects/025/franco_gwas_gene_data.rds")
+
+
+eids = future_lapply(franco_gwas$ENSEMBL[franco_gwas$nPat > 0], function(e) ptvb_MAF104$eid[franco_gwas_ptv[,e]])
+names(eids) = franco_gwas$ENSEMBL[franco_gwas$nPat > 0]
+saveRDS(eids, file = "objects/025/eids_ptv_patients_FRANCO_GWAS.rds")
+
 ```
 
 #Synonymous burdens
 
 ```{r}
-franco = readRDS("objects/025/FRANCO_influvac_genes.rds")
-gwas = readRDS("objects/025/GWAS_influvac_genes.rds")
-
+franco_gwas = readRDS("objects/025/franco_gwas_gene_data.rds")
 synburden = fread("/media/balazs/WorkL/balazs/Work/UKBiobank/Synonymous/10_4/SynonymousBurden.tsv")
 synburden %<>% dplyr::select(Patient.ID, Genes) %>% set_colnames(c("eid", "genes"))
 
-ukb_synENSG = as.list(synburden$genes)
-ukb_synENSG = lapply(ukb_synENSG, function(x) unique(unlist(strsplit(x, ","), use.names = F)))
-names(ukb_synENSG) = synburden$eid
-rm(synburden)
-
-genelists = list(
-  GWAS = gwas$ENSEMBL,
-  GWAS_Tcell90 = gwas$ENSEMBL[gwas$reported_trait == "T cell lymphocyte profile difference (90 days post influenza vaccination)"],
-  GWAS_Bcell7 = gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"],
-  FRANCO_GWAS_46genes = c(franco$ENSEMBL, gwas$ENSEMBL),
-  FRANCO_GWAS_Tcell90 = c(franco$ENSEMBL, gwas$ENSEMBL[gwas$reported_trait == "T cell lymphocyte profile difference (90 days post influenza vaccination)"]),
-  FRANCO_GWAS_Bcell7 = c(franco$ENSEMBL, gwas$ENSEMBL[gwas$reported_trait == "B cell lymphocyte profile difference (7 days post influenza vaccination)"]))
-
+ensgs = franco_gwas %>% filter(SYMBOL != "B4GALT4-AS1") %>% filter(nPat > 0) %>% pull(ENSEMBL)
 plan(multisession(workers = 4))
-future_sapply(1:length(genelists), function(i) {
-  synb_data = future_sapply(ukb_synENSG, function(u) {
-    sum(u %fin% genelists[[i]])
-  })
-  saveRDS(synb_data, file = paste0("objects/025/synb_", names(genelists)[i], ".rds"))
-})
+temp = future_sapply(ensgs, function(e) {stri_detect_fixed(str = synburden$genes, pattern = e)})
+colSums(temp)
+
+franco_gwas_syn = temp[,colSums(temp) > 0] #36 columns
+rownames(franco_gwas_syn) = synburden$eid
+dim(franco_gwas_syn)
+colSums(franco_gwas_syn)
+saveRDS(franco_gwas_syn, file = "objects/025/franco_gwas_syn_eidmtx.rds")
 
 ```
 
@@ -243,9 +279,336 @@ ggsave(
   width = 15, height = 9
 )
 
+```
 
+#Plot - Incidence of lung cancer - per genes
+##1st
 
+```{r}
+lci = readRDS("res/025/lung_cancer_incidence_cox_model_results_37_genes.rds")
+lci %<>% left_join(franco_gwas, by = "ENSEMBL")
 
+lci %>% arrange(hr_female) %>% pull(ENSEMBL) -> ens_sorted_female
+lci %>% arrange(hr_male) %>% pull(ENSEMBL) -> ens_sorted_male
+lci %>% arrange(hr_both) %>% pull(ENSEMBL) -> ens_sorted
+
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_female)) %>% 
+  ggplot(aes(x = ENSEMBL, y = hr_female, fill = p_female < 0.05)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("Hazard ratio") +
+  theme(axis.text.x = element_blank(), legend.position = "none", axis.title.x = element_blank()) -> fig_female_A
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_female)) %>% 
+  ggplot(aes(x = ENSEMBL, y = tp_female)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("No of lung cancer females with PTV") +
+  xlab("Ensembl ID") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank())-> fig_female_B
+ggarrange(plotlist = list(fig_female_A, fig_female_B), nrow = 2)
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_female.jpg", width = 25, height = 30, units = "cm")
+
+#Male
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_male)) %>% 
+  ggplot(aes(x = ENSEMBL, y = hr_male, fill = p_male < 0.05)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("Hazard ratio") +
+  theme(axis.text.x = element_blank(), legend.position = "none", axis.title.x = element_blank()) -> fig_male_A
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_male)) %>% 
+  ggplot(aes(x = ENSEMBL, y = tp_male)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("No of lung cancer males with PTV") +
+  xlab("Ensembl ID") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) -> fig_male_B
+ggarrange(plotlist = list(fig_male_A, fig_male_B), nrow = 2)
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_male.jpg", width = 25, height = 30, units = "cm")
+
+#BOTH
+lci %<>% mutate(tp_both = tp_female+tp_male, .before = tp_female)
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted)) %>% 
+  ggplot(aes(x = ENSEMBL, y = hr_both, fill = p_both < 0.05)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("Hazard ratio") +
+  theme(axis.text.x = element_blank(), legend.position = "none", axis.title.x = element_blank()) -> fig_both_A
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted)) %>% 
+  ggplot(aes(x = ENSEMBL, y = tp_both)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("No of lung cancer patients with PTV") +
+  xlab("Ensembl ID") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) -> fig_both_B
+ggarrange(plotlist = list(fig_both_A, fig_both_B), nrow = 2)
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_both.jpg", width = 25, height = 30, units = "cm")
+```
+
+##2nd with genesets
+
+```{r}
+lci = readRDS("res/025/lung_cancer_incidence_cox_model_results_37_genes_plus.rds")
+
+lci %<>% left_join(franco_gwas, by = "ENSEMBL")
+lci$geneset[lci$geneset == "franco"] = "FRANCO"
+lci$geneset[lci$geneset == "gwas"] = "GWAS"
+lci$ENSEMBL[lci$ENSEMBL  == "franco"] = "All FRANCO genes"
+lci$ENSEMBL[lci$ENSEMBL  == "gwas"] = "All GWAS genes"
+lci$ENSEMBL[lci$ENSEMBL  == "francoANDgwas"] = "All genes"
+lci$geneset[lci$ENSEMBL == "All FRANCO genes"] = "GENESETS"
+lci$geneset[lci$ENSEMBL == "All GWAS genes"] = "GENESETS"
+lci$geneset[lci$ENSEMBL == "All genes"] = "GENESETS"
+lci %<>% transform(geneset = factor(geneset, levels = c("FRANCO", "GWAS", "GENESETS")))
+
+lci %>% arrange(hr_female) %>% pull(ENSEMBL) -> ens_sorted_female
+lci %>% arrange(hr_male) %>% pull(ENSEMBL) -> ens_sorted_male
+lci %>% arrange(hr_both) %>% pull(ENSEMBL) -> ens_sorted
+
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_female)) %>% 
+  ggplot(aes(x = ENSEMBL, y = hr_female, fill = p_female < 0.05)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("Hazard ratio") +
+  theme(axis.text.x = element_blank(), legend.position = "none", axis.title.x = element_blank()) -> fig_female_A
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_female)) %>% 
+  ggplot(aes(x = ENSEMBL, y = tp_female)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("No of lung cancer females with PTV") +
+  xlab("Ensembl ID") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank())-> fig_female_B
+ggarrange(plotlist = list(fig_female_A, fig_female_B), nrow = 2)
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_female_v2.jpg", width = 35, height = 30, units = "cm")
+
+#Male
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_male)) %>% 
+  ggplot(aes(x = ENSEMBL, y = hr_male, fill = p_male < 0.05)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("Hazard ratio") +
+  theme(axis.text.x = element_blank(), legend.position = "none", axis.title.x = element_blank()) -> fig_male_A
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted_male)) %>% 
+  ggplot(aes(x = ENSEMBL, y = tp_male)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("No of lung cancer males with PTV") +
+  xlab("Ensembl ID") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) -> fig_male_B
+ggarrange(plotlist = list(fig_male_A, fig_male_B), nrow = 2)
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_male_v2.jpg", width = 35, height = 30, units = "cm")
+
+#BOTH
+lci %<>% mutate(tp_both = tp_female+tp_male, .before = tp_female)
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted)) %>% 
+  ggplot(aes(x = ENSEMBL, y = hr_both, fill = p_both < 0.05)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("Hazard ratio") +
+  theme(axis.text.x = element_blank(), legend.position = "none", axis.title.x = element_blank()) -> fig_both_A
+lci %>% 
+  transform(ENSEMBL = factor(ENSEMBL, levels = ens_sorted)) %>% 
+  ggplot(aes(x = ENSEMBL, y = tp_both)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(cols = vars(geneset), scales = "free_x") +
+  ylab("No of lung cancer patients with PTV") +
+  xlab("Ensembl ID") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) -> fig_both_B
+ggarrange(plotlist = list(fig_both_A, fig_both_B), nrow = 2)
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_both_v2.jpg", width = 35, height = 30, units = "cm")
+
+```
+
+##3rd version
+
+```{r}
+lci = readRDS("res/025/lung_cancer_incidence_cox_model_results_37_genes_plus.rds")
+franco_gwas = readRDS("objects/025/franco_gwas_gene_data.rds")
+lci %<>% left_join(franco_gwas, by = "ENSEMBL")
+lci %<>% mutate(tp_both = tp_female + tp_male)
+
+lci %>% 
+  filter(geneset == "franco") %>% 
+  transform(SYMBOL = factor(SYMBOL)) %>% 
+  transform(SYMBOL = fct_reorder(SYMBOL, hr_both)) %>% 
+  ggplot(aes(x = SYMBOL, y = hr_both)) + 
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(breaks = function(x) floor(min(x)):ceiling(max(x))) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  ylab("Hazard ratio") +
+  labs(title = "FRANCO genes") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(), 
+        legend.position = "none") -> fig_franco_hr
+
+lci %>% 
+  filter(geneset == "franco") %>% 
+  transform(SYMBOL = factor(SYMBOL)) %>% 
+  transform(SYMBOL = fct_reorder(SYMBOL, hr_both)) %>% 
+  ggplot(aes(x = SYMBOL, y = tp_both)) + 
+  geom_bar(stat = "identity") +
+  scale_y_continuous(breaks = function(x) floor(min(x)):ceiling(max(x))) +
+  #xlab("Gene symbol") +
+  ylab("No of lung cancer patients with PTV") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) -> fig_franco_oc
+
+lci %>% 
+  filter(geneset == "gwas") %>% 
+  transform(SYMBOL = factor(SYMBOL)) %>% 
+  transform(SYMBOL = fct_reorder(SYMBOL, hr_both)) %>% 
+  ggplot(aes(x = SYMBOL, y = hr_both)) + 
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(breaks = function(x) floor(min(x)):ceiling(max(x))) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  #ylab("Hazard ratio") +
+  labs(title = "GWAS genes") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") -> fig_gwas_hr
+
+lci %>% 
+  filter(geneset == "gwas") %>% 
+  transform(SYMBOL = factor(SYMBOL)) %>% 
+  transform(SYMBOL = fct_reorder(SYMBOL, hr_both)) %>% 
+  ggplot(aes(x = SYMBOL, y = tp_both)) + 
+  geom_bar(stat = "identity") +
+  scale_y_continuous(breaks = function(x) floor(min(x)):ceiling(max(x))) +
+  xlab("Gene symbol") +
+  #ylab("No of lung cancer patients with PTV") +
+  theme(axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 60, hjust = 1), 
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) -> fig_gwas_oc
+
+lci_genesets = lci %>% filter(is.na(geneset))
+lci_genesets$SYMBOL[lci_genesets$ENSEMBL == "franco"] = "All FRANCO genes"
+lci_genesets$SYMBOL[lci_genesets$ENSEMBL == "gwas"] = "All GWAS genes"
+lci_genesets$SYMBOL[lci_genesets$ENSEMBL == "francoANDgwas"] = "All genes"
+lci_genesets$SYMBOL = factor(lci_genesets$SYMBOL, levels = c("All FRANCO genes", "All GWAS genes", "All genes"))
+
+lci_genesets %>%  
+  ggplot(aes(x = SYMBOL, y = hr_both)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  #ylab("Hazard ratio") +
+  labs(title = "Genesets") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") -> fig_genesets_hr
+
+lci_genesets %>% 
+  ggplot(aes(x = SYMBOL, y = tp_both)) + 
+  geom_bar(stat = "identity") +
+  #ylab("No of lung cancer patients with PTV") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 60, hjust = 1), 
+        axis.title.y = element_blank(),
+        strip.background = element_blank(), 
+        strip.text.x = element_blank()) -> fig_genesets_oc
+
+ggarrange(plotlist = list(fig_franco_hr, fig_gwas_hr, fig_genesets_hr, fig_franco_oc, fig_gwas_oc, fig_genesets_oc), ncol = 3, nrow = 2, widths = c(23,14,6), align = "h")
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_both_v3.jpg", width = 45, height = 30, units = "cm")
+```
+
+##4th version
+
+```{r}
+lci = readRDS("res/025/lung_cancer_incidence_cox_model_results_37_genes_plus.rds")
+franco_gwas = readRDS("objects/025/franco_gwas_gene_data.rds")
+lci %<>% 
+  left_join(franco_gwas, by = "ENSEMBL") %>% 
+  filter(!is.na(geneset)) %>% 
+  mutate(tp_both = tp_female + tp_male, .before = tp_female)
+
+lci %>% 
+  transform(SYMBOL = factor(SYMBOL)) %>% 
+  transform(SYMBOL = fct_reorder(SYMBOL, hr_both)) %>% 
+  ggplot(aes(x = SYMBOL, y = hr_both, fill = geneset, color = geneset)) + 
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(breaks = function(x) floor(min(x)):ceiling(max(x))) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  ylab("Hazard ratio") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(), 
+        legend.position = "none") -> figA
+
+lci %>% 
+  transform(SYMBOL = factor(SYMBOL)) %>% 
+  transform(SYMBOL = fct_reorder(SYMBOL, hr_both)) %>% 
+  ggplot(aes(x = SYMBOL, y = tp_both, fill = geneset, color = geneset)) + 
+  geom_bar(stat = "identity") +
+  xlab("Gene symbol") +
+  ylab("No of lung cancer patients with PTV") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1), 
+        legend.position = "none") -> figB
+
+ggarrange(plotlist = list(figA, figB), nrow = 2)
+ggsave(filename = "plots/025/HR_inc_LungCancer_per_genes_both_v4.jpg", width = 45, height = 30, units = "cm")
+```
+
+#Cancer ocurrences
+
+```{r}
+ids = readLines("/media/balazs/WorkL/balazs/Work/UKBiobank/ptv_and_lung.txt")
+ids = strsplit(ids, " ")[[1]]
+
+ukb_data_raw = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/ukb_data.rds")
+ukb_dataF = ukb_data_raw %>% filter(eid %in% ids)
+
+franco_gwas_ptv_eidmtx = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/025/franco_gwas_ptv_eidmtx.rds")
+franco_gwas = readRDS("/media/balazs/WorkL/balazs/Work/UKBiobank/objects/025/franco_gwas_gene_data.rds")
+franco_gwas_ptv_eidmtx = franco_gwas_ptv_eidmtx[,colnames(franco_gwas_ptv_eidmtx) != "ENSG00000240254"]
+
+ptvb = rowSums(franco_gwas_ptv_eidmtx)
+names(ptvb) = rownames(franco_gwas_ptv_eidmtx)
+
+ukb_data_raw$ptvb = ptvb[match(ukb_data_raw$eid, names(ptvb))]
+table(ukb_data_raw$ptvb)
+
+ukb_data_raw$c.occurences[is.na(ukb_data_raw$c.occurences)] = 0
+ukb_dataF2 = ukb_data_raw %>% distinct(eid, c.occurences, .keep_all = T)
+
+ggplot(ukb_dataF2, aes(x = as.factor(ptvb), y = c.occurences)) + geom_boxplot()
+
+fisher.test(ukb_dataF2$ptvb > 0, ukb_dataF2$c.occurences > 0)
+fisher.test(ukb_dataF2$ptvb > 0, ukb_dataF2$c.occurences > 1)
+table(ukb_dataF2$ptvb > 0)
+table(ukb_dataF2$ptvb > 0, ukb_dataF2$c.occurences > 1)
+fisher.test(ukb_dataF2$ptvb > 0, ukb_dataF2$c.occurences > 2)
+fisher.test(ukb_dataF2$ptvb > 0, ukb_dataF2$c.occurences > 3)
 
 
 ```
